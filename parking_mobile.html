@@ -71,7 +71,7 @@ body{font-family:'Noto Sans TC',-apple-system,'PingFang TC',sans-serif;backgroun
 .sheet-btn:first-child{border-right:1px solid var(--g100);color:var(--g500)}
 .pm-overlay{position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:300;opacity:0;pointer-events:none;transition:opacity .2s}
 .pm-overlay.show{opacity:1;pointer-events:auto}
-.pm{position:fixed;bottom:0;left:0;right:0;z-index:301;background:#fff;border-radius:16px 16px 0 0;transform:translateY(100%);transition:transform .3s cubic-bezier(.32,.72,0,1);padding:20px 20px calc(20px + env(safe-area-inset-bottom))}
+.pm{position:fixed;bottom:0;left:0;right:0;z-index:301;background:#fff;border-radius:16px 16px 0 0;transform:translateY(100%);transition:transform .3s cubic-bezier(.32,.72,0,1);padding:20px 20px calc(20px + env(safe-area-inset-bottom));max-height:80vh;overflow-y:auto}
 .pm.show{transform:translateY(0)}
 .pm-title{font-size:1rem;font-weight:600;margin-bottom:16px;text-align:center}
 .pm-group{margin-bottom:16px}
@@ -80,6 +80,10 @@ body{font-family:'Noto Sans TC',-apple-system,'PingFang TC',sans-serif;backgroun
 .pm-opt{padding:8px 16px;border-radius:10px;border:1.5px solid var(--g200);background:#fff;font-size:.82rem;font-family:inherit;cursor:pointer;color:var(--g600)}
 .pm-opt.on{background:var(--pri);color:#fff;border-color:var(--pri)}
 .pm-done{width:100%;padding:14px;border:none;border-radius:12px;background:var(--g900);color:#fff;font-size:.92rem;font-family:inherit;font-weight:600;cursor:pointer;margin-top:8px}
+.chip-monthly{border-color:#7c3aed;color:#7c3aed}
+.chip-monthly.on{background:#7c3aed;color:#fff;border-color:#7c3aed}
+.chip-dist{border-color:#0891b2;color:#0891b2}
+.chip-dist.on{background:#0891b2;color:#fff;border-color:#0891b2}
 </style>
 </head>
 <body>
@@ -101,108 +105,203 @@ body{font-family:'Noto Sans TC',-apple-system,'PingFang TC',sans-serif;backgroun
 <div class="sheet-map"><div id="minimap"></div></div>
 <div class="sheet-footer"><button class="sheet-btn" id="sheetCloseBtn">關閉</button><button class="sheet-btn sheet-btn-nav" id="sheetNav">&#x1F9ED; 導航前往</button></div>
 </div>
+<!-- 計時費率 sheet -->
 <div class="pm-overlay" id="pmBg"></div>
 <div class="pm" id="pm">
-<div class="pm-title">&#x1F4B0; 費用篩選</div>
-<div class="pm-group"><div class="pm-label">計時費率（每半小時）</div>
+<div class="pm-title">⏱ 計時費率篩選</div>
+<div class="pm-group"><div class="pm-label">每半小時費率上限</div>
 <div class="pm-opts" id="pmHalf">
 <button class="pm-opt on" data-v="">不限</button><button class="pm-opt" data-v="10">&#x2264;10元</button><button class="pm-opt" data-v="15">&#x2264;15元</button><button class="pm-opt" data-v="20">&#x2264;20元</button><button class="pm-opt" data-v="30">&#x2264;30元</button><button class="pm-opt" data-v="50">&#x2264;50元</button>
 </div></div>
-<div class="pm-group"><div class="pm-label">月租費用</div>
-<div class="pm-opts" id="pmMonth">
+<button class="pm-done" id="pmDone">套用篩選</button>
+</div>
+
+<!-- 月租 sheet -->
+<div class="pm-overlay" id="mmBg"></div>
+<div class="pm" id="mm">
+<div class="pm-title">&#x1F3E0; 月租篩選</div>
+<div class="pm-group"><div class="pm-label">顯示範圍</div>
+<div class="pm-opts" id="mmHasOpts">
+<button class="pm-opt on" data-v="">全部停車場</button><button class="pm-opt" data-v="only">只看有月租</button>
+</div></div>
+<div class="pm-group"><div class="pm-label">月租費用上限</div>
+<div class="pm-opts" id="mmMonth">
 <button class="pm-opt on" data-v="">不限</button><button class="pm-opt" data-v="1000">&#x2264;1千</button><button class="pm-opt" data-v="1500">&#x2264;1.5千</button><button class="pm-opt" data-v="2000">&#x2264;2千</button><button class="pm-opt" data-v="3000">&#x2264;3千</button><button class="pm-opt" data-v="5000">&#x2264;5千</button>
 </div></div>
-<button class="pm-done" id="pmDone">套用篩選</button>
+<button class="pm-done" id="mmDone">套用篩選</button>
+</div>
+
+<!-- 行政區 sheet -->
+<div class="pm-overlay" id="distBg"></div>
+<div class="pm" id="distPm">
+<div class="pm-title">&#x1F4CD; 選擇行政區</div>
+<div class="pm-group">
+<div class="pm-opts" id="distOpts"></div>
+</div>
+<button class="pm-done" id="distDone">套用篩選</button>
 </div>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="parking_data.js"></script>
 <script>
 (function(){
-var D=PARKING_DATA,cDist='all',cType='all',cS='',cSort='name',cPH='',cPM='';
+var D=PARKING_DATA,cDist='all',cType='all',cS='',cSort='name',cPH='',cPM='',cMonthOnly=false;
 D.forEach(function(p){var w=p.chargeway||'';var m=w.match(/每半小時(\d+)元/);p._hh=m?+m[1]:null;var mm=w.match(/(?:每月|月租[：:]?)\s*([\d,]+)\s*元/);if(!mm)mm=w.match(/計月[收費：:]*(?:每月)?\s*([\d,]+)\s*元/);p._mo=mm?+mm[1].replace(/,/g,''):null;p._hm=/月租|計月|每月/.test(w)});
 var dN={};D.forEach(function(p){dN[p.areaname]=(dN[p.areaname]||0)+1});
 var dC={};D.forEach(function(p){if(!dC[p.areaname])dC[p.areaname]={a:[],o:[]};dC[p.areaname].a.push(+p.lat);dC[p.areaname].o.push(+p.lng)});
 Object.keys(dC).forEach(function(k){var d=dC[k];dC[k]=[d.a.reduce(function(a,b){return a+b},0)/d.a.length,d.o.reduce(function(a,b){return a+b},0)/d.o.length]});
 var sD=Object.entries(dN).sort(function(a,b){return b[1]-a[1]});
 document.getElementById('tc').textContent=D.length;
+
+// 建立行政區選項
+var distOptsEl=document.getElementById('distOpts');
+var distHtml='<button class="pm-opt on" data-d="all">全部</button>';
+sD.forEach(function(x){distHtml+='<button class="pm-opt" data-d="'+x[0]+'">'+x[0]+'<span style="font-size:.65rem;opacity:.6;margin-left:3px">'+x[1]+'</span></button>'});
+distOptsEl.innerHTML=distHtml;
+
+// Filter bar
 var fs=document.getElementById('filterScroll');
-var chips='<button class="chip on" data-d="all">全部</button>';
-chips+='<button class="chip" data-t="平面">平面</button><button class="chip" data-t="立體">立體</button><button class="chip" data-t="monthly">有月租</button>';
-chips+='<button class="chip chip-price" id="priceChip" data-action="price">&#x1F4B0; 費用</button>';
-sD.forEach(function(x){chips+='<button class="chip" data-d="'+x[0]+'">'+x[0]+'</button>'});
-fs.innerHTML=chips;
-fs.onclick=function(e){var c=e.target.closest('.chip');if(!c)return;
-if(c.dataset.action==='price'){openPM();return}
-if(c.dataset.d!==undefined){fs.querySelectorAll('[data-d]').forEach(function(x){x.classList.remove('on')});c.classList.add('on');cDist=c.dataset.d;if(c.dataset.d==='all'){fs.querySelectorAll('[data-t]').forEach(function(x){x.classList.remove('on')});cType='all'}render();return}
-if(c.dataset.t!==undefined){var wasOn=c.classList.contains('on');fs.querySelectorAll('[data-t]').forEach(function(x){x.classList.remove('on')});var allChip=fs.querySelector('[data-d="all"]');if(!wasOn){c.classList.add('on');cType=c.dataset.t;if(allChip)allChip.classList.remove('on')}else{cType='all';if(allChip)allChip.classList.add('on')}render()}};
+fs.innerHTML=
+  '<button class="chip on" id="typeAll">全部</button>'+
+  '<button class="chip" data-t="平面">平面</button>'+
+  '<button class="chip" data-t="立體">立體</button>'+
+  '<button class="chip chip-dist" id="distChip" data-action="dist">&#x1F4CD; 行政區</button>'+
+  '<button class="chip chip-monthly" id="monthlyChip" data-action="monthly">&#x1F3E0; 月租</button>'+
+  '<button class="chip chip-price" id="priceChip" data-action="price">&#x23F1; 計時費率</button>';
+
+fs.onclick=function(e){
+  var c=e.target.closest('.chip');if(!c)return;
+  if(c.dataset.action==='price'){openPM();return}
+  if(c.dataset.action==='monthly'){openMM();return}
+  if(c.dataset.action==='dist'){openDist();return}
+  if(c.id==='typeAll'){
+    document.querySelectorAll('#filterScroll [data-t]').forEach(function(x){x.classList.remove('on')});
+    document.getElementById('typeAll').classList.add('on');
+    cType='all';render();return;
+  }
+  if(c.dataset.t!==undefined){
+    var wasOn=c.classList.contains('on');
+    document.querySelectorAll('#filterScroll [data-t]').forEach(function(x){x.classList.remove('on')});
+    document.getElementById('typeAll').classList.remove('on');
+    if(!wasOn){c.classList.add('on');cType=c.dataset.t;}
+    else{cType='all';document.getElementById('typeAll').classList.add('on');}
+    render();
+  }
+};
+
 document.getElementById('si').oninput=function(e){cS=e.target.value.trim().toLowerCase();render()};
 document.getElementById('sortSel').onchange=function(e){cSort=e.target.value;render()};
+
 function esc(s){if(!s)return'';var d=document.createElement('div');d.textContent=s;return d.innerHTML}
 function hlM(t){if(!t)return'';return t.replace(/(月租[^。；;]*[。；;]?|計月[^。；;]*[。；;]?|每月[^。；;]*[。；;]?)/g,'<span class="hl">$1</span>')}
 function vB(v){var n=parseInt(v);if(isNaN(n)||n<0)return'<span class="vac vy">依現場</span>';if(n===0)return'<span class="vac vr">已滿</span>';return'<span class="vac vg">剩'+n+'</span>'}
+
 function render(){
-var mH=cPH?+cPH:0,mM=cPM?+cPM:0;
-var fd=D.filter(function(p){
-if(cDist!=='all'&&p.areaname!==cDist)return false;
-if(cType==='平面'&&p.parkingLotType!=='平面')return false;
-if(cType==='立體'&&p.parkingLotType!=='立體')return false;
-if(cType==='monthly'&&!p._hm)return false;
-if(mH&&(p._hh===null||p._hh>mH))return false;
-if(mM&&(p._mo===null||p._mo>mM))return false;
-if(cS){if(!((p.name||'').toLowerCase().indexOf(cS)>=0||(p.location||'').toLowerCase().indexOf(cS)>=0||(p.areaname||'').toLowerCase().indexOf(cS)>=0))return false}
-return true});
-fd.sort(function(a,b){if(cSort==='name')return(a.name||'').localeCompare(b.name||'');if(cSort==='vd')return(+b.volumn||0)-(+a.volumn||0);if(cSort==='pd')return(a._mo||99999)-(b._mo||99999);if(cSort==='area')return(a.areaname||'').localeCompare(b.areaname||'');return 0});
-document.getElementById('rc').textContent=fd.length+' 筆';
-var ls=document.getElementById('lst');
-if(!fd.length){ls.innerHTML='<div class="nores"><div class="nores-icon">&#x1F50D;</div><div>找不到符合條件的停車場</div></div>';return}
-var lim=200,ts=fd.slice(0,lim);
-ls.innerHTML=ts.map(function(p){
-var bg='<span class="bdg bdg-t">'+(p.parkingLotType||'—')+'</span>';
-if(p._hm)bg+='<span class="bdg bdg-m">月租</span>';
-var mt='<span>&#x1F4CD; '+esc(p.areaname)+'</span><span>&#x1F697; '+(+p.volumn||'—')+'格 '+vB(p.smallcarVacancy)+'</span>';
-if(p._hh)mt+='<span>&#x23F1; '+p._hh+'元/半hr</span>';
-if(p._mo)mt+='<span style="color:var(--org);font-weight:600">&#x1F4B0; 月租'+p._mo.toLocaleString()+'元</span>';
-return'<div class="card" data-id="'+p.id+'"><div class="card-body" onclick="openSheet(\''+p.id+'\')"><div class="card-row1"><div class="card-name">'+esc(p.name)+'</div><div class="badges">'+bg+'</div></div><div class="card-meta">'+mt+'</div><div class="card-price">'+hlM(esc(p.chargeway)||'費率未提供')+'</div></div><div class="card-actions"><button class="card-btn" onclick="openSheet(\''+p.id+'\')">&#x1F4CD; 查看地圖</button><a class="card-btn" href="https://www.google.com/maps/dir/?api=1&destination='+p.lat+','+p.lng+'" target="_blank" rel="noopener" style="text-decoration:none;color:var(--pri)">&#x1F9ED; 導航</a></div></div>'}).join('')+(fd.length>lim?'<div style="text-align:center;padding:20px;color:var(--g400);font-size:.78rem">還有'+(fd.length-lim)+'筆，請搜尋篩選</div>':'')
+  var mH=cPH?+cPH:0,mM=cPM?+cPM:0;
+  var fd=D.filter(function(p){
+    if(cDist!=='all'&&p.areaname!==cDist)return false;
+    if(cType==='平面'&&p.parkingLotType!=='平面')return false;
+    if(cType==='立體'&&p.parkingLotType!=='立體')return false;
+    if(cMonthOnly&&!p._hm)return false;
+    if(mH&&(p._hh===null||p._hh>mH))return false;
+    if(mM&&(p._mo===null||p._mo>mM))return false;
+    if(cS){if(!((p.name||'').toLowerCase().indexOf(cS)>=0||(p.location||'').toLowerCase().indexOf(cS)>=0||(p.areaname||'').toLowerCase().indexOf(cS)>=0))return false}
+    return true;
+  });
+  fd.sort(function(a,b){if(cSort==='name')return(a.name||'').localeCompare(b.name||'');if(cSort==='vd')return(+b.volumn||0)-(+a.volumn||0);if(cSort==='pd')return(a._mo||99999)-(b._mo||99999);if(cSort==='area')return(a.areaname||'').localeCompare(b.areaname||'');return 0});
+  document.getElementById('rc').textContent=fd.length+' 筆';
+  var ls=document.getElementById('lst');
+  if(!fd.length){ls.innerHTML='<div class="nores"><div class="nores-icon">&#x1F50D;</div><div>找不到符合條件的停車場</div></div>';return}
+  var lim=200,ts=fd.slice(0,lim);
+  ls.innerHTML=ts.map(function(p){
+    var bg='<span class="bdg bdg-t">'+(p.parkingLotType||'—')+'</span>';
+    if(p._hm)bg+='<span class="bdg bdg-m">月租</span>';
+    var mt='<span>&#x1F4CD; '+esc(p.areaname)+'</span><span>&#x1F697; '+(+p.volumn||'—')+'格 '+vB(p.smallcarVacancy)+'</span>';
+    if(p._hh)mt+='<span>&#x23F1; '+p._hh+'元/半hr</span>';
+    if(p._mo)mt+='<span style="color:var(--org);font-weight:600">&#x1F4B0; 月租'+p._mo.toLocaleString()+'元</span>';
+    return'<div class="card" data-id="'+p.id+'"><div class="card-body" onclick="openSheet(\''+p.id+'\')"><div class="card-row1"><div class="card-name">'+esc(p.name)+'</div><div class="badges">'+bg+'</div></div><div class="card-meta">'+mt+'</div><div class="card-price">'+hlM(esc(p.chargeway)||'費率未提供')+'</div></div><div class="card-actions"><button class="card-btn" onclick="openSheet(\''+p.id+'\')">&#x1F4CD; 查看地圖</button><a class="card-btn" href="https://www.google.com/maps/dir/?api=1&destination='+p.lat+','+p.lng+'" target="_blank" rel="noopener" style="text-decoration:none;color:var(--pri)">&#x1F9ED; 導航</a></div></div>';
+  }).join('')+(fd.length>lim?'<div style="text-align:center;padding:20px;color:var(--g400);font-size:.78rem">還有'+(fd.length-lim)+'筆，請搜尋篩選</div>':'');
 }
+
+// ── 計時費率 sheet ──
+function openPM(){document.getElementById('pmBg').classList.add('show');document.getElementById('pm').classList.add('show')}
+function closePM(){
+  document.getElementById('pmBg').classList.remove('show');document.getElementById('pm').classList.remove('show');
+  var pc=document.getElementById('priceChip');
+  if(cPH){pc.classList.add('on');pc.textContent='⏱ ≤'+cPH+'元/半hr';}
+  else{pc.classList.remove('on');pc.textContent='⏱ 計時費率';}
+  render();
+}
+document.getElementById('pmBg').onclick=closePM;
+document.getElementById('pmDone').onclick=closePM;
+document.getElementById('pmHalf').onclick=function(e){var o=e.target.closest('.pm-opt');if(!o)return;document.querySelectorAll('#pmHalf .pm-opt').forEach(function(x){x.classList.remove('on')});o.classList.add('on');cPH=o.dataset.v};
+
+// ── 月租 sheet ──
+function openMM(){document.getElementById('mmBg').classList.add('show');document.getElementById('mm').classList.add('show')}
+function closeMM(){
+  document.getElementById('mmBg').classList.remove('show');document.getElementById('mm').classList.remove('show');
+  var mc=document.getElementById('monthlyChip');
+  if(cMonthOnly||cPM){mc.classList.add('on');mc.textContent='🏠 月租已篩選';}
+  else{mc.classList.remove('on');mc.textContent='🏠 月租';}
+  render();
+}
+document.getElementById('mmBg').onclick=closeMM;
+document.getElementById('mmDone').onclick=closeMM;
+document.getElementById('mmHasOpts').onclick=function(e){
+  var o=e.target.closest('.pm-opt');if(!o)return;
+  document.querySelectorAll('#mmHasOpts .pm-opt').forEach(function(x){x.classList.remove('on')});
+  o.classList.add('on');cMonthOnly=(o.dataset.v==='only');
+};
+document.getElementById('mmMonth').onclick=function(e){var o=e.target.closest('.pm-opt');if(!o)return;document.querySelectorAll('#mmMonth .pm-opt').forEach(function(x){x.classList.remove('on')});o.classList.add('on');cPM=o.dataset.v};
+
+// ── 行政區 sheet ──
+function openDist(){document.getElementById('distBg').classList.add('show');document.getElementById('distPm').classList.add('show')}
+function closeDist(){
+  document.getElementById('distBg').classList.remove('show');document.getElementById('distPm').classList.remove('show');
+  var dc=document.getElementById('distChip');
+  if(cDist!=='all'){dc.classList.add('on');dc.textContent='📍 '+cDist;}
+  else{dc.classList.remove('on');dc.textContent='📍 行政區';}
+  render();
+}
+document.getElementById('distBg').onclick=closeDist;
+document.getElementById('distDone').onclick=closeDist;
+document.getElementById('distOpts').onclick=function(e){
+  var o=e.target.closest('.pm-opt');if(!o)return;
+  document.querySelectorAll('#distOpts .pm-opt').forEach(function(x){x.classList.remove('on')});
+  o.classList.add('on');cDist=o.dataset.d;
+};
+
+// ── 停車場詳細 sheet ──
 var minimap=null,miniMarker=null;
 window.openSheet=function(id){
-var p=D.find(function(x){return x.id===id});if(!p)return;
-document.querySelectorAll('.card').forEach(function(c){c.classList.remove('on')});
-var el=document.querySelector('.card[data-id="'+id+'"]');if(el)el.classList.add('on');
-document.getElementById('sheetName').textContent=p.name;
-var info='<div>&#x1F4CD; '+esc(p.areaname)+' — '+esc(p.location)+'</div>';
-info+='<div>&#x1F697; 車位：'+(p.volumn||'—')+' 格 ｜ '+(p.parkingLotType||'')+'</div>';
-info+='<div>&#x1F550; '+(esc(p.businesshours)||'—')+'</div>';
-if(p.telephone)info+='<div>&#x1F4DE; '+esc(p.telephone)+'</div>';
-var cw=p.chargeway?p.chargeway.replace(/(月租[^。；;]*[。；;]?|計月[^。；;]*[。；;]?|每月[^。；;]*[。；;]?)/g,'<span class="hl">$1</span>'):'費率未提供';
-info+='<div style="margin-top:6px;padding:8px;background:var(--g50);border-radius:8px;font-size:.74rem">'+cw+'</div>';
-document.getElementById('sheetInfo').innerHTML=info;
-document.getElementById('sheetNav').onclick=function(){window.open('https://www.google.com/maps/dir/?api=1&destination='+p.lat+','+p.lng,'_blank')};
-document.getElementById('sheetBg').classList.add('show');
-document.getElementById('sheet').classList.add('show');
-setTimeout(function(){
-var la=+p.lat,lo=+p.lng;
-if(!minimap){minimap=L.map('minimap',{zoomControl:false,attributionControl:false}).setView([la,lo],16);L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',{maxZoom:19,subdomains:'abcd'}).addTo(minimap)}
-else{minimap.setView([la,lo],16);minimap.invalidateSize()}
-if(miniMarker)minimap.removeLayer(miniMarker);
-miniMarker=L.marker([la,lo]).addTo(minimap);
-miniMarker.bindPopup('<b>'+esc(p.name)+'</b>').openPopup();
-setTimeout(function(){minimap.invalidateSize()},100);
-},150);
+  var p=D.find(function(x){return x.id===id});if(!p)return;
+  document.querySelectorAll('.card').forEach(function(c){c.classList.remove('on')});
+  var el=document.querySelector('.card[data-id="'+id+'"]');if(el)el.classList.add('on');
+  document.getElementById('sheetName').textContent=p.name;
+  var info='<div>&#x1F4CD; '+esc(p.areaname)+' — '+esc(p.location)+'</div>';
+  info+='<div>&#x1F697; 車位：'+(p.volumn||'—')+' 格 ｜ '+(p.parkingLotType||'')+'</div>';
+  info+='<div>&#x1F550; '+(esc(p.businesshours)||'—')+'</div>';
+  if(p.telephone)info+='<div>&#x1F4DE; '+esc(p.telephone)+'</div>';
+  var cw=p.chargeway?p.chargeway.replace(/(月租[^。；;]*[。；;]?|計月[^。；;]*[。；;]?|每月[^。；;]*[。；;]?)/g,'<span class="hl">$1</span>'):'費率未提供';
+  info+='<div style="margin-top:6px;padding:8px;background:var(--g50);border-radius:8px;font-size:.74rem">'+cw+'</div>';
+  document.getElementById('sheetInfo').innerHTML=info;
+  document.getElementById('sheetNav').onclick=function(){window.open('https://www.google.com/maps/dir/?api=1&destination='+p.lat+','+p.lng,'_blank')};
+  document.getElementById('sheetBg').classList.add('show');
+  document.getElementById('sheet').classList.add('show');
+  setTimeout(function(){
+    var la=+p.lat,lo=+p.lng;
+    if(!minimap){minimap=L.map('minimap',{zoomControl:false,attributionControl:false}).setView([la,lo],16);L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',{maxZoom:19,subdomains:'abcd'}).addTo(minimap);}
+    else{minimap.setView([la,lo],16);minimap.invalidateSize();}
+    if(miniMarker)minimap.removeLayer(miniMarker);
+    miniMarker=L.marker([la,lo]).addTo(minimap);
+    miniMarker.bindPopup('<b>'+esc(p.name)+'</b>').openPopup();
+    setTimeout(function(){minimap.invalidateSize()},100);
+  },150);
 };
 window.closeSheet=function(){document.getElementById('sheetBg').classList.remove('show');document.getElementById('sheet').classList.remove('show');document.querySelectorAll('.card').forEach(function(c){c.classList.remove('on')})};
 document.getElementById('sheetBg').onclick=closeSheet;
 document.getElementById('sheetClose').onclick=closeSheet;
 document.getElementById('sheetCloseBtn').onclick=closeSheet;
-function openPM(){document.getElementById('pmBg').classList.add('show');document.getElementById('pm').classList.add('show')}
-window.closePM=function(){document.getElementById('pmBg').classList.remove('show');document.getElementById('pm').classList.remove('show');
-var pc=document.getElementById('priceChip');
-if(cPH||cPM){pc.classList.add('on');pc.innerHTML='\uD83D\uDCB0 已篩選'}else{pc.classList.remove('on');pc.innerHTML='\uD83D\uDCB0 費用'}
-render()};
-document.getElementById('pmBg').onclick=closePM;
-document.getElementById('pmDone').onclick=closePM;
-document.getElementById('pmHalf').onclick=function(e){var o=e.target.closest('.pm-opt');if(!o)return;document.querySelectorAll('#pmHalf .pm-opt').forEach(function(x){x.classList.remove('on')});o.classList.add('on');cPH=o.dataset.v};
-document.getElementById('pmMonth').onclick=function(e){var o=e.target.closest('.pm-opt');if(!o)return;document.querySelectorAll('#pmMonth .pm-opt').forEach(function(x){x.classList.remove('on')});o.classList.add('on');cPM=o.dataset.v};
+
 render();
 })();
 </script>

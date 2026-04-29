@@ -31,6 +31,12 @@ body{font-family:'Noto Sans TC',-apple-system,'PingFang TC',sans-serif;backgroun
 .chip-price.on{background:var(--org);color:#fff;border-color:var(--org)}
 .results-bar{padding:8px 16px;font-size:.72rem;color:var(--g400);display:flex;justify-content:space-between;align-items:center;background:var(--g50);border-bottom:1px solid var(--g100)}
 .results-bar select{padding:3px 6px;border:1px solid var(--g200);border-radius:6px;font-size:.72rem;font-family:inherit;outline:none;background:#fff}
+.loc-bar{padding:8px 16px;font-size:.72rem;background:#f0fdf4;border-bottom:1px solid #bbf7d0;color:#15803d;display:none;align-items:center;gap:6px}
+.loc-bar.show{display:flex}
+.loc-bar-err{background:#fef2f2;border-bottom-color:#fecaca;color:#dc2626}
+.chip-near{border-color:#15803d;color:#15803d}
+.chip-near.on{background:#15803d;color:#fff;border-color:#15803d}
+.dist-tag{font-size:.6rem;color:var(--g400);margin-left:4px}
 .list{padding-bottom:env(safe-area-inset-bottom)}
 .card{margin:8px 12px;background:#fff;border-radius:var(--r);box-shadow:0 1px 3px rgba(0,0,0,.06);overflow:hidden;transition:all .15s;border:1.5px solid transparent}
 .card.on{border-color:var(--pri);box-shadow:0 2px 8px rgba(37,99,235,.15)}
@@ -95,7 +101,8 @@ body{font-family:'Noto Sans TC',-apple-system,'PingFang TC',sans-serif;backgroun
 </div>
 </div>
 <div class="filter-bar"><div class="filter-scroll" id="filterScroll"></div></div>
-<div class="results-bar"><span id="rc">0 筆</span><select id="sortSel"><option value="name">名稱</option><option value="vd">車位多→少</option><option value="pd">月租低→高</option><option value="area">行政區</option></select></div>
+<div class="results-bar"><span id="rc">0 筆</span><select id="sortSel"><option value="dist">距離近→遠</option><option value="name">名稱</option><option value="vd">車位多→少</option><option value="pd">月租低→高</option><option value="area">行政區</option></select></div>
+<div class="loc-bar" id="locBar">📍 <span id="locMsg">正在取得位置...</span></div>
 <div class="list" id="lst"></div>
 <div class="sheet-overlay" id="sheetBg"></div>
 <div class="sheet" id="sheet">
@@ -144,7 +151,8 @@ body{font-family:'Noto Sans TC',-apple-system,'PingFang TC',sans-serif;backgroun
 <script src="parking_data.js"></script>
 <script>
 (function(){
-var D=PARKING_DATA,cDist='all',cType='all',cS='',cSort='name',cPH='',cPM='',cMonthOnly=false;
+var D=PARKING_DATA,cDist='all',cType='all',cS='',cSort='name',cPH='',cPM='',cMonthOnly=false,cNear=false;
+var userLat=null,userLng=null;
 D.forEach(function(p){var w=p.chargeway||'';var m=w.match(/每半小時(\d+)元/);p._hh=m?+m[1]:null;var mm=w.match(/(?:每月|月租[：:]?)\s*([\d,]+)\s*元/);if(!mm)mm=w.match(/計月[收費：:]*(?:每月)?\s*([\d,]+)\s*元/);p._mo=mm?+mm[1].replace(/,/g,''):null;p._hm=/月租|計月|每月/.test(w)});
 var dN={};D.forEach(function(p){dN[p.areaname]=(dN[p.areaname]||0)+1});
 var dC={};D.forEach(function(p){if(!dC[p.areaname])dC[p.areaname]={a:[],o:[]};dC[p.areaname].a.push(+p.lat);dC[p.areaname].o.push(+p.lng)});
@@ -164,15 +172,22 @@ fs.innerHTML=
   '<button class="chip on" id="typeAll">全部</button>'+
   '<button class="chip" data-t="平面">平面</button>'+
   '<button class="chip" data-t="立體">立體</button>'+
-  '<button class="chip chip-dist" id="distChip" data-action="dist">&#x1F4CD; 行政區</button>'+
-  '<button class="chip chip-monthly" id="monthlyChip" data-action="monthly">&#x1F3E0; 月租</button>'+
-  '<button class="chip chip-price" id="priceChip" data-action="price">&#x23F1; 計時費率</button>';
+  '<button class="chip chip-near" id="nearChip" data-action="near">📍 附近1km</button>'+
+  '<button class="chip chip-dist" id="distChip" data-action="dist">🗺 行政區</button>'+
+  '<button class="chip chip-monthly" id="monthlyChip" data-action="monthly">🏠 月租</button>'+
+  '<button class="chip chip-price" id="priceChip" data-action="price">⏱ 計時費率</button>';
 
 fs.onclick=function(e){
   var c=e.target.closest('.chip');if(!c)return;
   if(c.dataset.action==='price'){openPM();return}
   if(c.dataset.action==='monthly'){openMM();return}
   if(c.dataset.action==='dist'){openDist();return}
+  if(c.dataset.action==='near'){
+    var wasOn=c.classList.contains('on');
+    c.classList.toggle('on');
+    cNear=!wasOn;
+    render();return;
+  }
   if(c.id==='typeAll'){
     document.querySelectorAll('#filterScroll [data-t]').forEach(function(x){x.classList.remove('on')});
     document.getElementById('typeAll').classList.add('on');
@@ -188,6 +203,41 @@ fs.onclick=function(e){
   }
 };
 
+// 計算兩點距離（公尺）
+function calcDist(lat1,lng1,lat2,lng2){
+  var R=6371000,r=Math.PI/180;
+  var dLat=(lat2-lat1)*r,dLng=(lng2-lng1)*r;
+  var a=Math.sin(dLat/2)*Math.sin(dLat/2)+Math.cos(lat1*r)*Math.cos(lat2*r)*Math.sin(dLng/2)*Math.sin(dLng/2);
+  return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+}
+function fmtDist(m){return m<1000?Math.round(m)+'m':(m/1000).toFixed(1)+'km'}
+
+// 取得使用者位置
+function initGeo(){
+  if(!navigator.geolocation)return;
+  var lb=document.getElementById('locBar'),lm=document.getElementById('locMsg');
+  lb.classList.add('show');
+  navigator.geolocation.getCurrentPosition(
+    function(pos){
+      userLat=pos.coords.latitude;userLng=pos.coords.longitude;
+      // 計算每個停車場距離
+      D.forEach(function(p){p._dist=calcDist(userLat,userLng,+p.lat,+p.lng)});
+      // 預設改距離排序
+      document.getElementById('sortSel').value='dist';
+      cSort='dist';
+      lm.textContent='已取得位置，顯示距離';
+      setTimeout(function(){lb.classList.remove('show')},3000);
+      render();
+    },
+    function(err){
+      lm.textContent='無法取得位置（'+err.message+'）';
+      lb.classList.add('loc-bar-err');
+      setTimeout(function(){lb.classList.remove('show')},4000);
+    },
+    {timeout:10000,maximumAge:60000}
+  );
+}
+
 document.getElementById('si').oninput=function(e){cS=e.target.value.trim().toLowerCase();render()};
 document.getElementById('sortSel').onchange=function(e){cSort=e.target.value;render()};
 
@@ -198,6 +248,7 @@ function vB(v){var n=parseInt(v);if(isNaN(n)||n<0)return'<span class="vac vy">�
 function render(){
   var mH=cPH?+cPH:0,mM=cPM?+cPM:0;
   var fd=D.filter(function(p){
+    if(cNear&&(p._dist===undefined||p._dist>1000))return false;
     if(cDist!=='all'&&p.areaname!==cDist)return false;
     if(cType==='平面'&&p.parkingLotType!=='平面')return false;
     if(cType==='立體'&&p.parkingLotType!=='立體')return false;
@@ -207,7 +258,17 @@ function render(){
     if(cS){if(!((p.name||'').toLowerCase().indexOf(cS)>=0||(p.location||'').toLowerCase().indexOf(cS)>=0||(p.areaname||'').toLowerCase().indexOf(cS)>=0))return false}
     return true;
   });
-  fd.sort(function(a,b){if(cSort==='name')return(a.name||'').localeCompare(b.name||'');if(cSort==='vd')return(+b.volumn||0)-(+a.volumn||0);if(cSort==='pd')return(a._mo||99999)-(b._mo||99999);if(cSort==='area')return(a.areaname||'').localeCompare(b.areaname||'');return 0});
+  fd.sort(function(a,b){
+    if(cSort==='dist'){
+      var ad=a._dist!==undefined?a._dist:999999,bd=b._dist!==undefined?b._dist:999999;
+      return ad-bd;
+    }
+    if(cSort==='name')return(a.name||'').localeCompare(b.name||'');
+    if(cSort==='vd')return(+b.volumn||0)-(+a.volumn||0);
+    if(cSort==='pd')return(a._mo||99999)-(b._mo||99999);
+    if(cSort==='area')return(a.areaname||'').localeCompare(b.areaname||'');
+    return 0;
+  });
   document.getElementById('rc').textContent=fd.length+' 筆';
   var ls=document.getElementById('lst');
   if(!fd.length){ls.innerHTML='<div class="nores"><div class="nores-icon">&#x1F50D;</div><div>找不到符合條件的停車場</div></div>';return}
@@ -215,7 +276,9 @@ function render(){
   ls.innerHTML=ts.map(function(p){
     var bg='<span class="bdg bdg-t">'+(p.parkingLotType||'—')+'</span>';
     if(p._hm)bg+='<span class="bdg bdg-m">月租</span>';
-    var mt='<span>&#x1F4CD; '+esc(p.areaname)+'</span><span>&#x1F697; '+(+p.volumn||'—')+'格 '+vB(p.smallcarVacancy)+'</span>';
+    var mt='<span>&#x1F4CD; '+esc(p.areaname)+'</span>';
+    if(p._dist!==undefined)mt+='<span style="color:var(--grn);font-weight:600">'+fmtDist(p._dist)+'</span>';
+    mt+='<span>&#x1F697; '+(+p.volumn||'—')+'格 '+vB(p.smallcarVacancy)+'</span>';
     if(p._hh)mt+='<span>&#x23F1; '+p._hh+'元/半hr</span>';
     if(p._mo)mt+='<span style="color:var(--org);font-weight:600">&#x1F4B0; 月租'+p._mo.toLocaleString()+'元</span>';
     return'<div class="card" data-id="'+p.id+'"><div class="card-body" onclick="openSheet(\''+p.id+'\')"><div class="card-row1"><div class="card-name">'+esc(p.name)+'</div><div class="badges">'+bg+'</div></div><div class="card-meta">'+mt+'</div><div class="card-price">'+hlM(esc(p.chargeway)||'費率未提供')+'</div></div><div class="card-actions"><button class="card-btn" onclick="openSheet(\''+p.id+'\')">&#x1F4CD; 查看地圖</button><a class="card-btn" href="https://www.google.com/maps/dir/?api=1&destination='+p.lat+','+p.lng+'" target="_blank" rel="noopener" style="text-decoration:none;color:var(--pri)">&#x1F9ED; 導航</a></div></div>';
@@ -303,6 +366,7 @@ document.getElementById('sheetClose').onclick=closeSheet;
 document.getElementById('sheetCloseBtn').onclick=closeSheet;
 
 render();
+initGeo();
 })();
 </script>
 </body>

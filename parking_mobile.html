@@ -90,6 +90,8 @@ body{font-family:'Noto Sans TC',-apple-system,'PingFang TC',sans-serif;backgroun
 .chip-monthly.on{background:#7c3aed;color:#fff;border-color:#7c3aed}
 .chip-dist{border-color:#0891b2;color:#0891b2}
 .chip-dist.on{background:#0891b2;color:#fff;border-color:#0891b2}
+.chip-type{border-color:#64748b;color:#64748b}
+.chip-type.on{background:#64748b;color:#fff;border-color:#64748b}
 </style>
 </head>
 <body>
@@ -112,6 +114,20 @@ body{font-family:'Noto Sans TC',-apple-system,'PingFang TC',sans-serif;backgroun
 <div class="sheet-map"><div id="minimap"></div></div>
 <div class="sheet-footer"><button class="sheet-btn" id="sheetCloseBtn">關閉</button><button class="sheet-btn sheet-btn-nav" id="sheetNav">&#x1F9ED; 導航前往</button></div>
 </div>
+<!-- 類型 sheet -->
+<div class="pm-overlay" id="typeBg"></div>
+<div class="pm" id="typePm">
+<div class="pm-title">🏢 停車場類型</div>
+<div class="pm-group">
+<div class="pm-opts" id="typeOpts">
+<button class="pm-opt on" data-v="all">全部</button>
+<button class="pm-opt" data-v="平面">平面</button>
+<button class="pm-opt" data-v="立體">立體</button>
+</div>
+</div>
+<button class="pm-done" id="typeDone">套用篩選</button>
+</div>
+
 <!-- 計時費率 sheet -->
 <div class="pm-overlay" id="pmBg"></div>
 <div class="pm" id="pm">
@@ -166,40 +182,25 @@ var distHtml='<button class="pm-opt on" data-d="all">全部</button>';
 sD.forEach(function(x){distHtml+='<button class="pm-opt" data-d="'+x[0]+'">'+x[0]+'<span style="font-size:.65rem;opacity:.6;margin-left:3px">'+x[1]+'</span></button>'});
 distOptsEl.innerHTML=distHtml;
 
-// Filter bar
+// Filter bar：順序 附近 → 計時費率 → 行政區 → 月租 → 類型
 var fs=document.getElementById('filterScroll');
 fs.innerHTML=
-  '<button class="chip on" id="typeAll">全部</button>'+
-  '<button class="chip" data-t="平面">平面</button>'+
-  '<button class="chip" data-t="立體">立體</button>'+
   '<button class="chip chip-near" id="nearChip" data-action="near">📍 附近1km</button>'+
+  '<button class="chip chip-price" id="priceChip" data-action="price">⏱ 計時費率</button>'+
   '<button class="chip chip-dist" id="distChip" data-action="dist">🗺 行政區</button>'+
   '<button class="chip chip-monthly" id="monthlyChip" data-action="monthly">🏠 月租</button>'+
-  '<button class="chip chip-price" id="priceChip" data-action="price">⏱ 計時費率</button>';
+  '<button class="chip chip-type" id="typeChip" data-action="type">🏢 類型</button>';
 
 fs.onclick=function(e){
   var c=e.target.closest('.chip');if(!c)return;
   if(c.dataset.action==='price'){openPM();return}
   if(c.dataset.action==='monthly'){openMM();return}
   if(c.dataset.action==='dist'){openDist();return}
+  if(c.dataset.action==='type'){openType();return}
   if(c.dataset.action==='near'){
-    var wasOn=c.classList.contains('on');
-    c.classList.toggle('on');
-    cNear=!wasOn;
+    cNear=!cNear;
+    c.classList.toggle('on',cNear);
     render();return;
-  }
-  if(c.id==='typeAll'){
-    document.querySelectorAll('#filterScroll [data-t]').forEach(function(x){x.classList.remove('on')});
-    document.getElementById('typeAll').classList.add('on');
-    cType='all';render();return;
-  }
-  if(c.dataset.t!==undefined){
-    var wasOn=c.classList.contains('on');
-    document.querySelectorAll('#filterScroll [data-t]').forEach(function(x){x.classList.remove('on')});
-    document.getElementById('typeAll').classList.remove('on');
-    if(!wasOn){c.classList.add('on');cType=c.dataset.t;}
-    else{cType='all';document.getElementById('typeAll').classList.add('on');}
-    render();
   }
 };
 
@@ -220,17 +221,19 @@ function initGeo(){
   navigator.geolocation.getCurrentPosition(
     function(pos){
       userLat=pos.coords.latitude;userLng=pos.coords.longitude;
-      // 計算每個停車場距離
       D.forEach(function(p){p._dist=calcDist(userLat,userLng,+p.lat,+p.lng)});
-      // 預設改距離排序
       document.getElementById('sortSel').value='dist';
       cSort='dist';
-      lm.textContent='已取得位置，顯示距離';
+      // 預設開啟附近1km
+      cNear=true;
+      var nc=document.getElementById('nearChip');
+      if(nc)nc.classList.add('on');
+      lm.textContent='已取得位置，顯示附近停車場';
       setTimeout(function(){lb.classList.remove('show')},3000);
       render();
     },
     function(err){
-      lm.textContent='無法取得位置（'+err.message+'）';
+      lm.textContent='無法取得位置，顯示全部停車場';
       lb.classList.add('loc-bar-err');
       setTimeout(function(){lb.classList.remove('show')},4000);
     },
@@ -331,6 +334,23 @@ document.getElementById('distOpts').onclick=function(e){
   var o=e.target.closest('.pm-opt');if(!o)return;
   document.querySelectorAll('#distOpts .pm-opt').forEach(function(x){x.classList.remove('on')});
   o.classList.add('on');cDist=o.dataset.d;
+};
+
+// ── 類型 sheet ──
+function openType(){document.getElementById('typeBg').classList.add('show');document.getElementById('typePm').classList.add('show')}
+function closeType(){
+  document.getElementById('typeBg').classList.remove('show');document.getElementById('typePm').classList.remove('show');
+  var tc=document.getElementById('typeChip');
+  if(cType!=='all'){tc.classList.add('on');tc.textContent='🏢 '+cType;}
+  else{tc.classList.remove('on');tc.textContent='🏢 類型';}
+  render();
+}
+document.getElementById('typeBg').onclick=closeType;
+document.getElementById('typeDone').onclick=closeType;
+document.getElementById('typeOpts').onclick=function(e){
+  var o=e.target.closest('.pm-opt');if(!o)return;
+  document.querySelectorAll('#typeOpts .pm-opt').forEach(function(x){x.classList.remove('on')});
+  o.classList.add('on');cType=o.dataset.v;
 };
 
 // ── 停車場詳細 sheet ──

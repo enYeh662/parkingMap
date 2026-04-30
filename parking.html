@@ -173,8 +173,8 @@ body{font-family:'Noto Sans TC',-apple-system,'PingFang TC',sans-serif;backgroun
   <div class="header-left">
     <div class="logo">🅿️ <span id="cityLabel">停車場</span></div>
     <div class="city-tabs" id="cityTabs">
-      <button class="city-tab on" data-city="kaohsiung">高雄市</button>
-      <button class="city-tab" data-city="tainan">台南市</button>
+      <button class="city-tab on" data-city="kaohsiung">高雄</button>
+      <button class="city-tab" data-city="tainan">台南</button>
       <button class="city-tab" data-city="chiayi">嘉義</button>
     </div>
   </div>
@@ -192,8 +192,28 @@ body{font-family:'Noto Sans TC',-apple-system,'PingFang TC',sans-serif;backgroun
         </div>
       </div>
       <div class="filter-section">
+        <div class="filter-label">附近</div>
+        <div class="chips">
+          <button class="chip" id="deskNearChip" onclick="toggleNear()">📍 附近1km</button>
+        </div>
+      </div>
+      <div class="filter-section">
+        <div class="filter-label">計時費率（每半小時）</div>
+        <select class="price-select" id="priceHalf"><option value="">不限</option><option value="10">≤10元</option><option value="15">≤15元</option><option value="20">≤20元</option><option value="25">≤25元</option><option value="30">≤30元</option><option value="50">≤50元</option></select>
+      </div>
+      <div class="filter-section">
         <div class="filter-label">行政區</div>
         <div class="chips" id="distChips"></div>
+      </div>
+      <div class="filter-section">
+        <div class="filter-label">月租</div>
+        <div class="chips">
+          <button class="chip" id="deskMonthlyChip" onclick="toggleMonthly()">🏠 只看月租</button>
+        </div>
+        <div style="margin-top:8px">
+          <label class="filter-label">月租費用上限</label>
+          <select class="price-select" id="priceMonth"><option value="">不限</option><option value="1000">≤1千</option><option value="1500">≤1.5千</option><option value="2000">≤2千</option><option value="3000">≤3千</option><option value="5000">≤5千</option></select>
+        </div>
       </div>
       <div class="filter-section">
         <div class="filter-label">類型</div>
@@ -201,20 +221,6 @@ body{font-family:'Noto Sans TC',-apple-system,'PingFang TC',sans-serif;backgroun
           <button class="chip on" data-t="all">全部</button>
           <button class="chip" data-t="平面">平面</button>
           <button class="chip" data-t="立體">立體</button>
-          <button class="chip" data-t="monthly">有月租</button>
-        </div>
-      </div>
-      <div class="filter-section">
-        <div class="filter-label">費用篩選</div>
-        <div class="price-row">
-          <div class="price-group">
-            <label>計時費率（每半小時）</label>
-            <select class="price-select" id="priceHalf"><option value="">不限</option><option value="10">≤10元</option><option value="15">≤15元</option><option value="20">≤20元</option><option value="25">≤25元</option><option value="30">≤30元</option><option value="50">≤50元</option></select>
-          </div>
-          <div class="price-group">
-            <label>月租費用</label>
-            <select class="price-select" id="priceMonth"><option value="">不限</option><option value="1000">≤1千</option><option value="1500">≤1.5千</option><option value="2000">≤2千</option><option value="3000">≤3千</option><option value="5000">≤5千</option></select>
-          </div>
         </div>
       </div>
     </div>
@@ -299,7 +305,7 @@ body{font-family:'Noto Sans TC',-apple-system,'PingFang TC',sans-serif;backgroun
 <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 <script src="parking_data.js"></script>
 <script>
-var CITIES={kaohsiung:{label:'高雄市',varName:'PARKING_DATA',file:null},tainan:{label:'台南市',varName:'PARKING_DATA_TAINAN',file:'data_tainan.js'},chiayi:{label:'嘉義',varName:'PARKING_DATA_CHIAYI',file:'data_chiayi.js'}};
+var CITIES={kaohsiung:{label:'高雄',varName:'PARKING_DATA',file:null,center:[22.6273,120.3014],zoom:12},tainan:{label:'台南',varName:'PARKING_DATA_TAINAN',file:'data_tainan.js',center:[22.9999,120.2269],zoom:12},chiayi:{label:'嘉義',varName:'PARKING_DATA_CHIAYI',file:'data_chiayi.js',center:[23.4801,120.4491],zoom:12}};
 var CITY_DATA={kaohsiung:null}; // 高雄資料在 parking_data.js 載入後存這裡
 var loadedCities={kaohsiung:true};
 var currentCity='kaohsiung';
@@ -444,13 +450,15 @@ function switchCity(city){
   resetAllFilters();
   if(loadedCities[city]){
     D=CITY_DATA[city]||(window[CITIES[city].varName])||[];parseData(D);rebuildDist();
-    document.getElementById('tc').textContent=D.length;render();
+    document.getElementById('tc').textContent=D.length;
+    if(map)map.setView(CITIES[city].center,CITIES[city].zoom);
+    render();
   } else {
     document.getElementById('lst').innerHTML='<div style="text-align:center;padding:40px;color:var(--g400)">載入中...</div>';
     document.getElementById('mobLst').innerHTML='<div style="text-align:center;padding:40px;color:var(--g400)">載入中...</div>';
     var s=document.createElement('script');s.src=CITIES[city].file+'?v='+Date.now();
     (function(c){
-      s.onload=function(){loadedCities[c]=true;CITY_DATA[c]=window[CITIES[c].varName]||[];D=CITY_DATA[c];parseData(D);rebuildDist();document.getElementById('tc').textContent=D.length;render();};
+      s.onload=function(){loadedCities[c]=true;CITY_DATA[c]=window[CITIES[c].varName]||[];D=CITY_DATA[c];parseData(D);rebuildDist();document.getElementById('tc').textContent=D.length;if(map)map.setView(CITIES[c].center,CITIES[c].zoom);render();};
       s.onerror=function(){document.getElementById('lst').innerHTML='<div class="nores"><div class="nores-icon">⚠️</div><div>資料載入失敗</div></div>';};
     })(city);
     document.head.appendChild(s);
@@ -462,6 +470,8 @@ function resetAllFilters(){
   document.querySelector('#typeChips .chip[data-t="all"]').classList.add('on');
   document.getElementById('priceHalf').value='';
   document.getElementById('priceMonth').value='';
+  var dn=document.getElementById('deskNearChip');if(dn)dn.classList.remove('on');
+  var dm=document.getElementById('deskMonthlyChip');if(dm)dm.classList.remove('on');
   var nc=document.getElementById('mobNearChip');if(nc)nc.classList.remove('on');
   var pc=document.getElementById('mobPriceChip');if(pc){pc.classList.remove('on');pc.textContent='⏱ 計時費率';}
   var dc=document.getElementById('mobDistChip');if(dc){dc.classList.remove('on');dc.textContent='🗺 行政區';}
@@ -480,6 +490,8 @@ document.getElementById('distChips').onclick=function(e){var t=e.target.closest(
 document.getElementById('typeChips').onclick=function(e){var b=e.target.closest('.chip');if(!b)return;document.querySelectorAll('#typeChips .chip').forEach(function(x){x.classList.remove('on');});b.classList.add('on');cType=b.dataset.t;render();};
 document.getElementById('priceHalf').onchange=function(e){cPH=e.target.value;render();};
 document.getElementById('priceMonth').onchange=function(e){cPM=e.target.value;render();};
+window.toggleNear=function(){cNear=!cNear;var c=document.getElementById('deskNearChip');if(c)c.classList.toggle('on',cNear);var nc=document.getElementById('mobNearChip');if(nc)nc.classList.toggle('on',cNear);render();};
+window.toggleMonthly=function(){cMonthOnly=!cMonthOnly;var c=document.getElementById('deskMonthlyChip');if(c)c.classList.toggle('on',cMonthOnly);render();};
 var mobFs=document.getElementById('mobFilterScroll');
 mobFs.innerHTML=
   '<button class="mchip mchip-near" id="mobNearChip" data-action="near">📍 附近1km</button>'+

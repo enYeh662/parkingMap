@@ -114,12 +114,12 @@ jobs:
           print(f"台南: {len(tainan)} 筆, 嘉義: {len(chiayi_all)} 筆")
 
           with open('data_tainan.js', 'w', encoding='utf-8') as f:
-              f.write('const PARKING_DATA_TAINAN = ')
+              f.write('var PARKING_DATA_TAINAN = ')
               json.dump(tainan, f, ensure_ascii=False)
               f.write(';\n')
 
           with open('data_chiayi.js', 'w', encoding='utf-8') as f:
-              f.write('const PARKING_DATA_CHIAYI = ')
+              f.write('var PARKING_DATA_CHIAYI = ')
               json.dump(chiayi_all, f, ensure_ascii=False)
               f.write(';\n')
           print("完成")

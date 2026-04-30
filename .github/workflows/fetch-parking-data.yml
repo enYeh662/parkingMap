@@ -1,0 +1,97 @@
+name: Fetch Parking Data
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'   # 每 6 小時執行一次
+  workflow_dispatch:          # 也可以手動觸發
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Fetch TDX Token
+        id: token
+        run: |
+          TOKEN=$(curl -s -X POST "https://tdx.transportdata.tw/auth/realms/TDXConnect/protocol/openid-connect/token" \
+            -H "Content-Type: application/x-www-form-urlencoded" \
+            -d "grant_type=client_credentials&client_id=${{ secrets.TDX_CLIENT_ID }}&client_secret=${{ secrets.TDX_CLIENT_SECRET }}" \
+            | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
+          echo "token=$TOKEN" >> $GITHUB_OUTPUT
+
+      - name: Fetch Tainan Parking Data
+        run: |
+          curl -s -X GET \
+            "https://tdx.transportdata.tw/api/basic/v1/Parking/OffStreet/CarPark/City/Tainan?\$format=JSON&\$top=1000" \
+            -H "Authorization: Bearer ${{ steps.token.outputs.token }}" \
+            -o /tmp/tainan_raw.json
+
+      - name: Fetch Chiayi Parking Data
+        run: |
+          curl -s -X GET \
+            "https://tdx.transportdata.tw/api/basic/v1/Parking/OffStreet/CarPark/City/Chiayi?\$format=JSON&\$top=1000" \
+            -H "Authorization: Bearer ${{ steps.token.outputs.token }}" \
+            -o /tmp/chiayi_raw.json
+          curl -s -X GET \
+            "https://tdx.transportdata.tw/api/basic/v1/Parking/OffStreet/CarPark/City/ChiayiCounty?\$format=JSON&\$top=1000" \
+            -H "Authorization: Bearer ${{ steps.token.outputs.token }}" \
+            -o /tmp/chiayi_county_raw.json
+
+      - name: Convert to JS format
+        run: |
+          python3 << 'EOF'
+          import json, re
+
+          def parse_tdx(raw, city_name):
+              try:
+                  data = json.load(open(raw, encoding='utf-8'))
+              except:
+                  return []
+              results = []
+              for p in data:
+                  geo = p.get('CarParkPosition', {}) or {}
+                  lat = geo.get('PositionLat') or ''
+                  lng = geo.get('PositionLon') or ''
+                  if not lat or not lng:
+                      continue
+                  fare = p.get('FareInfo', '') or ''
+                  results.append({
+                      'id': p.get('CarParkID', ''),
+                      'name': p.get('CarParkName', {}).get('Zh_tw', '') or p.get('CarParkName', ''),
+                      'city': city_name,
+                      'areaname': p.get('CarParkName', {}).get('Zh_tw', '')[:3] if isinstance(p.get('CarParkName'), dict) else '',
+                      'location': p.get('CarParkAddress', {}).get('StructuredAddress', '') or str(p.get('CarParkAddress', '')),
+                      'lat': str(lat),
+                      'lng': str(lng),
+                      'volumn': str(p.get('TotalSpaces', '') or ''),
+                      'smallcarVacancy': str(p.get('AvailableSpaces', -2) if p.get('AvailableSpaces') is not None else -2),
+                      'businesshours': p.get('ServiceInfo', '') or '',
+                      'chargeway': fare,
+                      'telephone': p.get('CarParkPhone', '') or '',
+                      'parkingLotType': '立體' if p.get('CarParkType', 0) in [2,3,4] else '平面',
+                      '_hasMonthly': '月租' in fare or '計月' in fare,
+                  })
+              return results
+
+          tainan = parse_tdx('/tmp/tainan_raw.json', '台南市')
+          chiayi = parse_tdx('/tmp/chiayi_raw.json', '嘉義市')
+          chiayi_c = parse_tdx('/tmp/chiayi_county_raw.json', '嘉義縣')
+
+          all_data = tainan + chiayi + chiayi_c
+          print(f"台南: {len(tainan)} 筆, 嘉義市: {len(chiayi)} 筆, 嘉義縣: {len(chiayi_c)} 筆")
+
+          with open('data_tainan_chiayi.js', 'w', encoding='utf-8') as f:
+              f.write('const PARKING_DATA_TAINAN_CHIAYI = ')
+              json.dump(all_data, f, ensure_ascii=False)
+              f.write(';\n')
+          EOF
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data_tainan_chiayi.js
+          git diff --staged --quiet || git commit -m "自動更新台南/嘉義停車場資料 $(date '+%Y-%m-%d %H:%M')"
+          git push

@@ -99,12 +99,18 @@ jobs:
           chiayi = parse_tdx('/tmp/chiayi_raw.json', '嘉義市')
           chiayi_c = parse_tdx('/tmp/chiayi_county_raw.json', '嘉義縣')
 
-          all_data = tainan + chiayi + chiayi_c
-          print(f"合計: {len(all_data)} 筆")
+          # 嘉義市 + 嘉義縣合併
+          chiayi_all = chiayi + chiayi_c
+          print(f"台南: {len(tainan)} 筆, 嘉義: {len(chiayi_all)} 筆")
 
-          with open('data_tainan_chiayi.js', 'w', encoding='utf-8') as f:
-              f.write('const PARKING_DATA_TAINAN_CHIAYI = ')
-              json.dump(all_data, f, ensure_ascii=False)
+          with open('data_tainan.js', 'w', encoding='utf-8') as f:
+              f.write('const PARKING_DATA_TAINAN = ')
+              json.dump(tainan, f, ensure_ascii=False)
+              f.write(';\n')
+
+          with open('data_chiayi.js', 'w', encoding='utf-8') as f:
+              f.write('const PARKING_DATA_CHIAYI = ')
+              json.dump(chiayi_all, f, ensure_ascii=False)
               f.write(';\n')
           print("完成")
           EOF
@@ -113,6 +119,6 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add data_tainan_chiayi.js
+          git add data_tainan.js data_chiayi.js
           git diff --staged --quiet || git commit -m "自動更新台南/嘉義停車場資料 $(date '+%Y-%m-%d %H:%M')"
           git push

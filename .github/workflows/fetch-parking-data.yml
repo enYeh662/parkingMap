@@ -42,7 +42,7 @@ jobs:
       - name: Convert to JS format
         run: |
           python3 << 'EOF'
-          import re
+          import json, re
 
           def extract_district(addr, city_name):
               if not addr: return city_name

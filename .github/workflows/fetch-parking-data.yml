@@ -42,7 +42,16 @@ jobs:
       - name: Convert to JS format
         run: |
           python3 << 'EOF'
-          import json
+          import re
+
+          def extract_district(addr, city_name):
+              if not addr: return city_name
+              # 移除縣市名稱前綴（台南市、臺南市、嘉義市、嘉義縣）
+              addr = re.sub(r'^(台南市|臺南市|嘉義市|嘉義縣|高雄市)', '', addr)
+              # 提取行政區（XX區、XX鄉、XX鎮、XX市）
+              m = re.match(r'^([^\d\s]{2,4}[區鄉鎮市])', addr)
+              if m: return m.group(1)
+              return city_name
 
           def load_json(path):
               try:
@@ -78,12 +87,13 @@ jobs:
                   if has_monthly and '月租' not in fare:
                       fare = ('月租方案可洽停車場。' if not fare else fare + '月租方案可洽停車場。')
                   park_type = p.get('CarParkType', 1)
+                  addr = get_str(p.get('Address', ''))
                   results.append({
                       'id': get_str(p.get('CarParkID', '')),
                       'name': get_str(p.get('CarParkName', '')),
                       'city': city_name,
-                      'areaname': get_str(p.get('Address', ''))[:3],
-                      'location': get_str(p.get('Address', '')),
+                      'areaname': extract_district(addr, city_name),
+                      'location': addr,
                       'lat': str(lat),
                       'lng': str(lng),
                       'volumn': str(p.get('TotalSpaces', '') or ''),

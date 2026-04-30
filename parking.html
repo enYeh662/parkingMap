@@ -446,7 +446,7 @@ function switchCity(city){
   } else {
     document.getElementById('lst').innerHTML='<div style="text-align:center;padding:40px;color:var(--g400)">載入中...</div>';
     document.getElementById('mobLst').innerHTML='<div style="text-align:center;padding:40px;color:var(--g400)">載入中...</div>';
-    var s=document.createElement('script');s.src=CITIES[city].file;
+    var s=document.createElement('script');s.src=CITIES[city].file+'?v='+Date.now();
     (function(c){
       s.onload=function(){loadedCities[c]=true;D=window[CITIES[c].varName]||[];parseData(D);rebuildDist();document.getElementById('tc').textContent=D.length;render();};
       s.onerror=function(){document.getElementById('lst').innerHTML='<div class="nores"><div class="nores-icon">⚠️</div><div>資料載入失敗</div></div>';};

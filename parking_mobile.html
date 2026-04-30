@@ -220,7 +220,7 @@ document.getElementById('cityTabs').onclick=function(e){
   } else {
     document.getElementById('lst').innerHTML='<div class="loading-bar">載入中...</div>';
     var s=document.createElement('script');
-    s.src=CITIES[city].file;
+    s.src=CITIES[city].file+'?v='+Date.now();
     (function(c){
       s.onload=function(){
         loadedCities[c]=true;

@@ -43,12 +43,20 @@ jobs:
         run: |
           python3 -c "
           import json
-          data = json.load(open('/tmp/tainan_raw.json', encoding='utf-8'))
-          if data:
-              print('First record keys:', list(data[0].keys()))
-              print('Sample:', json.dumps(data[0], ensure_ascii=False, indent=2)[:800])
-          else:
-              print('Empty data')
+          raw = open('/tmp/tainan_raw.json', encoding='utf-8').read()
+          print('Raw preview:', raw[:500])
+          try:
+              data = json.loads(raw)
+              print('Type:', type(data).__name__)
+              if isinstance(data, list):
+                  print('List length:', len(data))
+                  if data:
+                      print('First item keys:', list(data[0].keys()) if isinstance(data[0], dict) else type(data[0]).__name__)
+                      print('Sample:', json.dumps(data[0], ensure_ascii=False)[:400])
+              elif isinstance(data, dict):
+                  print('Dict keys:', list(data.keys()))
+          except Exception as e:
+              print('Parse error:', e)
           "
 
       - name: Convert to JS format
@@ -56,50 +64,63 @@ jobs:
           python3 << 'EOF'
           import json
 
-          def get_name(val):
-              if isinstance(val, dict):
-                  return val.get('Zh_tw', '') or val.get('En', '') or ''
-              return str(val) if val else ''
-
-          def get_address(val):
-              if isinstance(val, dict):
-                  return val.get('StructuredAddress', '') or val.get('Address', '') or ''
-              return str(val) if val else ''
-
-          def parse_tdx(raw, city_name):
+          def load_json(path):
               try:
-                  data = json.load(open(raw, encoding='utf-8'))
-              except Exception as e:
-                  print(f"Error loading {raw}: {e}")
+                  raw = open(path, encoding='utf-8').read()
+                  data = json.loads(raw)
+                  # 處理各種包裝格式
+                  if isinstance(data, list):
+                      return data
+                  if isinstance(data, dict):
+                      for key in ['CarParks', 'data', 'Data', 'result', 'Result']:
+                          if key in data and isinstance(data[key], list):
+                              return data[key]
+                      # 找第一個 list 值
+                      for v in data.values():
+                          if isinstance(v, list):
+                              return v
                   return []
-              if not isinstance(data, list):
-                  # 有些 API 回傳 {"data": [...]}
-                  data = data.get('data', data.get('CarParks', []))
+              except Exception as e:
+                  print(f"Error loading {path}: {e}")
+                  return []
+
+          def get_str(val):
+              if val is None:
+                  return ''
+              if isinstance(val, dict):
+                  return val.get('Zh_tw', '') or val.get('En', '') or str(list(val.values())[0]) if val else ''
+              return str(val)
+
+          def parse_tdx(path, city_name):
+              data = load_json(path)
+              print(f"{city_name}: loaded {len(data)} records")
               results = []
               for p in data:
-                  geo = p.get('CarParkPosition', {}) or {}
-                  if isinstance(geo, str):
+                  if not isinstance(p, dict):
+                      continue
+                  geo = p.get('CarParkPosition') or {}
+                  if not isinstance(geo, dict):
                       geo = {}
                   lat = geo.get('PositionLat') or ''
                   lng = geo.get('PositionLon') or ''
                   if not lat or not lng:
                       continue
-                  fare = p.get('FareInfo', '') or ''
-                  name = get_name(p.get('CarParkName', ''))
-                  addr = get_address(p.get('CarParkAddress', ''))
+                  fare = get_str(p.get('FareInfo', ''))
+                  name = get_str(p.get('CarParkName', ''))
+                  addr = get_str(p.get('CarParkAddress', ''))
                   results.append({
-                      'id': p.get('CarParkID', ''),
+                      'id': get_str(p.get('CarParkID', '')),
                       'name': name,
                       'city': city_name,
-                      'areaname': p.get('AreaName', '') or (name[:3] if name else ''),
+                      'areaname': get_str(p.get('AreaName', '')),
                       'location': addr,
                       'lat': str(lat),
                       'lng': str(lng),
                       'volumn': str(p.get('TotalSpaces', '') or ''),
                       'smallcarVacancy': str(p.get('AvailableSpaces', -2) if p.get('AvailableSpaces') is not None else -2),
-                      'businesshours': p.get('ServiceInfo', '') or '',
+                      'businesshours': get_str(p.get('ServiceInfo', '')),
                       'chargeway': fare,
-                      'telephone': p.get('CarParkPhone', '') or '',
+                      'telephone': get_str(p.get('CarParkPhone', '')),
                       'parkingLotType': '立體' if p.get('CarParkType', 0) in [2,3,4] else '平面',
                   })
               return results
@@ -109,12 +130,13 @@ jobs:
           chiayi_c = parse_tdx('/tmp/chiayi_county_raw.json', '嘉義縣')
 
           all_data = tainan + chiayi + chiayi_c
-          print(f"台南: {len(tainan)} 筆, 嘉義市: {len(chiayi)} 筆, 嘉義縣: {len(chiayi_c)} 筆, 合計: {len(all_data)} 筆")
+          print(f"合計: {len(all_data)} 筆")
 
           with open('data_tainan_chiayi.js', 'w', encoding='utf-8') as f:
               f.write('const PARKING_DATA_TAINAN_CHIAYI = ')
               json.dump(all_data, f, ensure_ascii=False)
               f.write(';\n')
+          print("寫入 data_tainan_chiayi.js 完成")
           EOF
 
       - name: Commit and push

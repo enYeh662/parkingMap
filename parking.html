@@ -300,12 +300,14 @@ body{font-family:'Noto Sans TC',-apple-system,'PingFang TC',sans-serif;backgroun
 <script src="parking_data.js"></script>
 <script>
 var CITIES={kaohsiung:{label:'高雄市',varName:'PARKING_DATA',file:null},tainan:{label:'台南市',varName:'PARKING_DATA_TAINAN',file:'data_tainan.js'},chiayi:{label:'嘉義',varName:'PARKING_DATA_CHIAYI',file:'data_chiayi.js'}};
+var CITY_DATA={kaohsiung:null}; // 高雄資料在 parking_data.js 載入後存這裡
 var loadedCities={kaohsiung:true};
 var currentCity='kaohsiung';
 var isMobile=window.innerWidth<=860;
 window.addEventListener('resize',function(){isMobile=window.innerWidth<=860;});
 (function(){
 var D=PARKING_DATA,cDist='all',cType='all',cS='',cSort='dist',cPH='',cPM='',cMonthOnly=false,cNear=false,aId=null;
+CITY_DATA.kaohsiung=PARKING_DATA; // 保存高雄資料參考
 var userLat=null,userLng=null;
 var map=null,cg=null,minimap=null,miniMarker=null;
 
@@ -441,14 +443,14 @@ function switchCity(city){
   document.getElementById('si').value='';
   resetAllFilters();
   if(loadedCities[city]){
-    D=window[CITIES[city].varName]||[];parseData(D);rebuildDist();
+    D=CITY_DATA[city]||(window[CITIES[city].varName])||[];parseData(D);rebuildDist();
     document.getElementById('tc').textContent=D.length;render();
   } else {
     document.getElementById('lst').innerHTML='<div style="text-align:center;padding:40px;color:var(--g400)">載入中...</div>';
     document.getElementById('mobLst').innerHTML='<div style="text-align:center;padding:40px;color:var(--g400)">載入中...</div>';
     var s=document.createElement('script');s.src=CITIES[city].file+'?v='+Date.now();
     (function(c){
-      s.onload=function(){loadedCities[c]=true;D=window[CITIES[c].varName]||[];parseData(D);rebuildDist();document.getElementById('tc').textContent=D.length;render();};
+      s.onload=function(){loadedCities[c]=true;CITY_DATA[c]=window[CITIES[c].varName]||[];D=CITY_DATA[c];parseData(D);rebuildDist();document.getElementById('tc').textContent=D.length;render();};
       s.onerror=function(){document.getElementById('lst').innerHTML='<div class="nores"><div class="nores-icon">⚠️</div><div>資料載入失敗</div></div>';};
     })(city);
     document.head.appendChild(s);

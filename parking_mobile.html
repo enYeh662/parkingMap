@@ -180,11 +180,13 @@ var CITIES={
   tainan:   {label:'台南市', varName:'PARKING_DATA_TAINAN', file:'data_tainan.js'},
   chiayi:   {label:'嘉義',   varName:'PARKING_DATA_CHIAYI', file:'data_chiayi.js'}
 };
+var CITY_DATA={kaohsiung:null};
 var loadedCities={kaohsiung:true};
 var currentCity='kaohsiung';
 
 (function(){
 var D=PARKING_DATA,cDist='all',cType='all',cS='',cSort='name',cPH='',cPM='',cMonthOnly=false,cNear=false;
+CITY_DATA.kaohsiung=PARKING_DATA;
 var userLat=null,userLng=null;
 
 function parseData(arr){
@@ -212,7 +214,7 @@ document.getElementById('cityTabs').onclick=function(e){
   document.getElementById('si').value='';
   resetChips();
   if(loadedCities[city]){
-    D=window[CITIES[city].varName]||[];
+    D=CITY_DATA[city]||(window[CITIES[city].varName])||[];
     parseData(D);
     rebuildDist();
     document.getElementById('tc').textContent=D.length;
@@ -224,7 +226,8 @@ document.getElementById('cityTabs').onclick=function(e){
     (function(c){
       s.onload=function(){
         loadedCities[c]=true;
-        D=window[CITIES[c].varName]||[];
+        CITY_DATA[c]=window[CITIES[c].varName]||[];
+        D=CITY_DATA[c];
         parseData(D);
         rebuildDist();
         document.getElementById('tc').textContent=D.length;

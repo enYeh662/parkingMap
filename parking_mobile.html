@@ -221,17 +221,19 @@ document.getElementById('cityTabs').onclick=function(e){
     document.getElementById('lst').innerHTML='<div class="loading-bar">載入中...</div>';
     var s=document.createElement('script');
     s.src=CITIES[city].file;
-    s.onload=function(){
-      loadedCities[city]=true;
-      D=window[CITIES[city].varName]||[];
-      parseData(D);
-      rebuildDist();
-      document.getElementById('tc').textContent=D.length;
-      render();
-    };
-    s.onerror=function(){
-      document.getElementById('lst').innerHTML='<div class="nores"><div class="nores-icon">⚠️</div><div>資料載入失敗</div></div>';
-    };
+    (function(c){
+      s.onload=function(){
+        loadedCities[c]=true;
+        D=window[CITIES[c].varName]||[];
+        parseData(D);
+        rebuildDist();
+        document.getElementById('tc').textContent=D.length;
+        render();
+      };
+      s.onerror=function(){
+        document.getElementById('lst').innerHTML='<div class="nores"><div class="nores-icon">⚠️</div><div>資料載入失敗</div></div>';
+      };
+    })(city);
     document.head.appendChild(s);
   }
 };

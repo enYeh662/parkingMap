@@ -39,30 +39,60 @@ jobs:
             -H "Authorization: Bearer ${{ steps.token.outputs.token }}" \
             -o /tmp/chiayi_county_raw.json
 
+      - name: Inspect raw data structure
+        run: |
+          python3 -c "
+          import json
+          data = json.load(open('/tmp/tainan_raw.json', encoding='utf-8'))
+          if data:
+              print('First record keys:', list(data[0].keys()))
+              print('Sample:', json.dumps(data[0], ensure_ascii=False, indent=2)[:800])
+          else:
+              print('Empty data')
+          "
+
       - name: Convert to JS format
         run: |
           python3 << 'EOF'
-          import json, re
+          import json
+
+          def get_name(val):
+              if isinstance(val, dict):
+                  return val.get('Zh_tw', '') or val.get('En', '') or ''
+              return str(val) if val else ''
+
+          def get_address(val):
+              if isinstance(val, dict):
+                  return val.get('StructuredAddress', '') or val.get('Address', '') or ''
+              return str(val) if val else ''
 
           def parse_tdx(raw, city_name):
               try:
                   data = json.load(open(raw, encoding='utf-8'))
-              except:
+              except Exception as e:
+                  print(f"Error loading {raw}: {e}")
                   return []
+              if not isinstance(data, list):
+                  # 有些 API 回傳 {"data": [...]}
+                  data = data.get('data', data.get('CarParks', []))
               results = []
               for p in data:
                   geo = p.get('CarParkPosition', {}) or {}
+                  if isinstance(geo, str):
+                      geo = {}
                   lat = geo.get('PositionLat') or ''
                   lng = geo.get('PositionLon') or ''
                   if not lat or not lng:
                       continue
                   fare = p.get('FareInfo', '') or ''
+                  name = get_name(p.get('CarParkName', ''))
+                  addr = get_address(p.get('CarParkAddress', ''))
                   results.append({
                       'id': p.get('CarParkID', ''),
-                      'name': p.get('CarParkName', {}).get('Zh_tw', '') or p.get('CarParkName', ''),
+                      'name': name,
                       'city': city_name,
-                      'areaname': p.get('CarParkName', {}).get('Zh_tw', '')[:3] if isinstance(p.get('CarParkName'), dict) else '',
-                      'location': p.get('CarParkAddress', {}).get('StructuredAddress', '') or str(p.get('CarParkAddress', '')),
+                      'areaname': p.get('AreaName', '') or (name[:3] if name else ''),
+                      'location': addr,
                       'lat': str(lat),
                       'lng': str(lng),
                       'volumn': str(p.get('TotalSpaces', '') or ''),
@@ -71,7 +101,6 @@ jobs:
                       'chargeway': fare,
                       'telephone': p.get('CarParkPhone', '') or '',
                       'parkingLotType': '立體' if p.get('CarParkType', 0) in [2,3,4] else '平面',
-                      '_hasMonthly': '月租' in fare or '計月' in fare,
                   })
               return results
 
@@ -80,7 +109,7 @@ jobs:
           chiayi_c = parse_tdx('/tmp/chiayi_county_raw.json', '嘉義縣')
 
           all_data = tainan + chiayi + chiayi_c
-          print(f"台南: {len(tainan)} 筆, 嘉義市: {len(chiayi)} 筆, 嘉義縣: {len(chiayi_c)} 筆")
+          print(f"台南: {len(tainan)} 筆, 嘉義市: {len(chiayi)} 筆, 嘉義縣: {len(chiayi_c)} 筆, 合計: {len(all_data)} 筆")
 
           with open('data_tainan_chiayi.js', 'w', encoding='utf-8') as f:
               f.write('const PARKING_DATA_TAINAN_CHIAYI = ')

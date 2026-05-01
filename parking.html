@@ -11,7 +11,7 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css"/>
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css"/>
 <style>
-:root{--pri:#2563eb;--pri-d:#1d4ed8;--pri-l:#eff6ff;--org:#ea580c;--org-l:#fff7ed;--grn:#16a34a;--grn-l:#dcfce7;--red:#dc2626;--g50:#f9fafb;--g100:#f3f4f6;--g200:#e5e7eb;--g300:#d1d5db;--g400:#9ca3af;--g500:#6b7280;--g600:#4b5563;--g700:#374151;--g800:#1f2937;--g900:#111827;--r:12px}
+:root{--pri:#2563eb;--pri-d:#1d4ed8;--pri-l:#eff6ff;--org:#ea580c;--org-l:#fff7ed;--grn:#16a34a;--grn-l:#dcfce7;--red:#dc2626;--accent:#94a3b8;--g50:#f9fafb;--g100:#f3f4f6;--g200:#e5e7eb;--g300:#d1d5db;--g400:#9ca3af;--g500:#6b7280;--g600:#4b5563;--g700:#374151;--g800:#1f2937;--g900:#111827;--r:12px;--r-sm:8px;--r-pill:20px;--shadow-sm:0 1px 3px rgba(0,0,0,.06);--shadow-md:0 4px 6px rgba(0,0,0,.07);--shadow-lg:0 10px 15px rgba(0,0,0,.1)}
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 body{font-family:'Noto Sans TC',-apple-system,'PingFang TC',sans-serif;background:var(--g50);color:var(--g800);-webkit-font-smoothing:antialiased;overflow-x:hidden}
 
@@ -20,9 +20,11 @@ body{font-family:'Noto Sans TC',-apple-system,'PingFang TC',sans-serif;backgroun
 .header-left{display:flex;align-items:center;gap:16px}
 .logo{font-size:1.3rem;font-weight:700;white-space:nowrap}
 .logo span{color:var(--pri);font-weight:300}
-.city-tabs{display:flex;gap:2px;align-items:stretch}
-.city-tab{padding:0 16px;font-size:.82rem;font-family:inherit;border:none;background:none;color:var(--g400);cursor:pointer;white-space:nowrap;border-bottom:3px solid transparent;transition:all .15s}
-.city-tab.on{color:#fff;border-bottom-color:var(--pri)}
+.logo-car{font-size:1.2em;margin-right:4px;display:inline-block;transition:transform 0.2s}
+.logo-car:hover{transform:translateX(3px)}
+.logo-tw{font-weight:700;color:var(--accent)}
+.clear-filters-btn{color:var(--red);font-size:.72rem;border:none;background:none;cursor:pointer;padding:2px 6px;border-radius:6px;transition:all .15s}
+.clear-filters-btn:hover{background:var(--g100)}
 .header-right{display:flex;align-items:center;font-size:.75rem;color:var(--g400);gap:8px}
 
 /* ── DESKTOP LAYOUT ── */
@@ -37,15 +39,19 @@ body{font-family:'Noto Sans TC',-apple-system,'PingFang TC',sans-serif;backgroun
 .search-input:focus{border-color:var(--pri);background:#fff;box-shadow:0 0 0 3px rgba(37,99,235,.1)}
 .search-icon{position:absolute;left:11px;top:50%;transform:translateY(-50%);width:15px;height:15px;opacity:.4;pointer-events:none}
 .chips{display:flex;flex-wrap:wrap;gap:5px}
-.chip{padding:4px 12px;border-radius:20px;border:1.5px solid var(--g200);background:#fff;cursor:pointer;font-size:.76rem;font-family:inherit;transition:all .15s;color:var(--g600);white-space:nowrap}
+.chip{padding:4px 12px;border-radius:var(--r-pill);border:1.5px solid var(--g200);background:#fff;cursor:pointer;font-size:.76rem;font-family:inherit;transition:all .15s;color:var(--g600);white-space:nowrap}
 .chip:hover{border-color:var(--pri);color:var(--pri)}
+.chip:active{transform:scale(0.97)}
 .chip.on{background:var(--pri);color:#fff;border-color:var(--pri)}
+.chip.on:hover{background:var(--pri-d)}
+.chip.on:active{transform:scale(0.97)}
 .chip .n{font-size:.62rem;opacity:.6;margin-left:2px}
 .price-row{display:flex;gap:10px;align-items:flex-end}
 .price-group{flex:1;display:flex;flex-direction:column;gap:4px}
 .price-group label{font-size:.7rem;color:var(--g500)}
-.price-select{width:100%;padding:7px 10px;border:1.5px solid var(--g200);border-radius:8px;font-size:.8rem;font-family:inherit;outline:none;background:#fff;color:var(--g700)}
+.price-select{width:100%;padding:7px 10px;border:1.5px solid var(--g200);border-radius:var(--r-sm);font-size:.8rem;font-family:inherit;outline:none;background:#fff;color:var(--g700)}
 .price-select:focus{border-color:var(--pri)}
+.price-select:hover{border-color:var(--pri)}
 .toolbar{display:flex;align-items:center;justify-content:space-between;padding:7px 16px;background:var(--g50);border-bottom:1px solid var(--g100);font-size:.76rem;color:var(--g500);flex-shrink:0}
 .toolbar select{padding:3px 8px;border:1px solid var(--g200);border-radius:6px;font-size:.74rem;font-family:inherit;outline:none;background:#fff}
 .loc-bar{padding:7px 16px;font-size:.72rem;background:#f0fdf4;border-bottom:1px solid #bbf7d0;color:#15803d;display:none;align-items:center;gap:6px;flex-shrink:0}
@@ -131,6 +137,7 @@ body{font-family:'Noto Sans TC',-apple-system,'PingFang TC',sans-serif;backgroun
 .mchip-monthly{border-color:#7c3aed;color:#7c3aed}.mchip-monthly.on{background:#7c3aed;color:#fff;border-color:#7c3aed}
 .mchip-dist{border-color:#0891b2;color:#0891b2}.mchip-dist.on{background:#0891b2;color:#fff;border-color:#0891b2}
 .mchip-type{border-color:#64748b;color:#64748b}.mchip-type.on{background:#64748b;color:#64748b;color:#fff;border-color:#64748b}
+.mchip:active{transform:scale(0.97)}
 .mob-results-bar{display:none;padding:7px 16px;font-size:.72rem;color:var(--g400);background:var(--g50);border-bottom:1px solid var(--g100);justify-content:space-between;align-items:center}
 .mob-results-bar select{padding:3px 6px;border:1px solid var(--g200);border-radius:6px;font-size:.72rem;font-family:inherit;outline:none;background:#fff}
 .mob-card{margin:8px 12px;background:#fff;border-radius:var(--r);box-shadow:0 1px 3px rgba(0,0,0,.06);overflow:hidden;border:1.5px solid transparent}
@@ -154,29 +161,20 @@ body{font-family:'Noto Sans TC',-apple-system,'PingFang TC',sans-serif;backgroun
   .header-right{display:none}
   .layout{flex-direction:column}
   .sidebar{display:none}
-  .map-wrap{height:100vh}
+  .map-wrap{display:none}
   .mob-filter-bar{display:block}
   .mob-results-bar{display:flex}
-  .mob-toggle{display:block}
-  .layout.show-list .map-wrap{display:none}
-  .layout.show-list .mob-list{display:block;height:calc(100vh - 56px - 38px - 36px);overflow-y:auto;padding-bottom:env(safe-area-inset-bottom)}
-  .layout.show-map .mob-list{display:none}
-  .mob-list{display:none}
+  .mob-list{display:block;height:calc(100vh - 56px - 38px - 36px);overflow-y:auto;padding-bottom:env(safe-area-inset-bottom)}
 }
 @media(min-width:861px){
-  .mob-filter-bar,.mob-results-bar,.mob-toggle,.mob-list,.sheet,.sheet-overlay,.pm,.pm-overlay{display:none!important}
+  .mob-filter-bar,.mob-results-bar,.mob-list,.sheet,.sheet-overlay,.pm,.pm-overlay{display:none!important}
 }
 </style>
 </head>
 <body>
 <div class="header">
   <div class="header-left">
-    <div class="logo">🅿️ <span id="cityLabel">停車場</span></div>
-    <div class="city-tabs" id="cityTabs">
-      <button class="city-tab on" data-city="kaohsiung">高雄</button>
-      <button class="city-tab" data-city="tainan">台南</button>
-      <button class="city-tab" data-city="chiayi">嘉義</button>
-    </div>
+    <div class="logo">ParkNow<span class="logo-tw">.TW</span></div>
   </div>
   <div class="header-right"><span id="tc">0</span> 座停車場</div>
 </div>
@@ -185,6 +183,14 @@ body{font-family:'Noto Sans TC',-apple-system,'PingFang TC',sans-serif;backgroun
 <div class="layout" id="layout">
   <div class="sidebar">
     <div class="filters">
+      <div class="filter-section">
+        <div class="filter-label">城市</div>
+        <div class="chips" id="citySwitcher">
+          <button class="chip on" data-city="kaohsiung">高雄</button>
+          <button class="chip" data-city="tainan">台南</button>
+          <button class="chip" data-city="chiayi">嘉義</button>
+        </div>
+      </div>
       <div class="filter-section">
         <div class="search-input-wrap">
           <svg class="search-icon" viewBox="0 0 16 16" fill="#9ca3af"><path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85zm-5.242.656a5 5 0 1 1 0-10 5 5 0 0 1 0 10z"/></svg>
@@ -206,7 +212,15 @@ body{font-family:'Noto Sans TC',-apple-system,'PingFang TC',sans-serif;backgroun
         <div class="chips" id="distChips"></div>
       </div>
       <div class="filter-section">
-        <div class="filter-label">月租</div>
+        <div class="filter-label">類型</div>
+        <div class="chips" id="typeChips">
+          <button class="chip on" data-t="all">全部</button>
+          <button class="chip" data-t="平面">平面</button>
+          <button class="chip" data-t="立體">立體</button>
+        </div>
+      </div>
+      <div class="filter-section">
+        <div class="filter-label">特殊項目</div>
         <div class="chips">
           <button class="chip" id="deskMonthlyChip" onclick="toggleMonthly()">🏠 只看月租</button>
         </div>
@@ -215,18 +229,13 @@ body{font-family:'Noto Sans TC',-apple-system,'PingFang TC',sans-serif;backgroun
           <select class="price-select" id="priceMonth"><option value="">不限</option><option value="1000">≤1千</option><option value="1500">≤1.5千</option><option value="2000">≤2千</option><option value="3000">≤3千</option><option value="5000">≤5千</option></select>
         </div>
       </div>
-      <div class="filter-section">
-        <div class="filter-label">類型</div>
-        <div class="chips" id="typeChips">
-          <button class="chip on" data-t="all">全部</button>
-          <button class="chip" data-t="平面">平面</button>
-          <button class="chip" data-t="立體">立體</button>
-        </div>
-      </div>
     </div>
     <div class="loc-bar" id="locBar">📍 <span id="locMsg">正在取得位置...</span></div>
     <div class="toolbar">
-      <span id="rc">0 筆結果</span>
+      <div style="display:flex;align-items:center;gap:8px">
+        <span id="rc">0 筆結果</span>
+        <button class="clear-filters-btn" id="clearFiltersBtn" style="display:none">✕ 清除篩選</button>
+      </div>
       <select id="sortSel"><option value="dist">距離近→遠</option><option value="name">名稱</option><option value="vd">車位多→少</option><option value="pd">月租低→高</option><option value="area">行政區</option></select>
     </div>
     <div class="list" id="lst"></div>
@@ -242,9 +251,14 @@ body{font-family:'Noto Sans TC',-apple-system,'PingFang TC',sans-serif;backgroun
 
 <!-- 手機版 filter bar -->
 <div class="mob-filter-bar"><div class="mob-filter-scroll" id="mobFilterScroll"></div></div>
-<div class="mob-results-bar"><span id="mobRc">0 筆</span><select id="mobSortSel"><option value="dist">距離近→遠</option><option value="name">名稱</option><option value="vd">車位多→少</option><option value="pd">月租低→高</option><option value="area">行政區</option></select></div>
+<div class="mob-results-bar">
+  <div style="display:flex;align-items:center;gap:6px">
+    <span id="mobRc">0 筆</span>
+    <button class="clear-filters-btn" id="mobClearFiltersBtn" style="display:none">✕ 清除</button>
+  </div>
+  <select id="mobSortSel"><option value="dist">距離近→遠</option><option value="name">名稱</option><option value="vd">車位多→少</option><option value="pd">月租低→高</option><option value="area">行政區</option></select></div>
 <div class="mob-list" id="mobLst"></div>
-<button class="mob-toggle" id="mobToggle">🗺️ 切換地圖</button>
+
 
 <!-- 手機版停車場詳細 sheet -->
 <div class="sheet-overlay" id="sheetBg"></div>
@@ -393,7 +407,7 @@ function renderDesktop(fd){
       '<div class="card-price">'+hlM(esc(p.chargeway)||'費率未提供')+'</div>'+
       '<div class="card-actions"><a class="btn-nav" href="'+u+'" target="_blank" rel="noopener" onclick="event.stopPropagation()">🧭 導航</a></div></div>';
   }).join('')+(fd.length>lim?'<div style="text-align:center;padding:16px;color:var(--g400);font-size:.78rem">還有'+(fd.length-lim)+'筆，請篩選縮小範圍</div>':'');
-  if(!map)initMap();
+  if(!isMobile&&!map)initMap();
   var icons=getIcons();
   cg.clearLayers();
   fd.forEach(function(p){
@@ -425,7 +439,15 @@ function renderMobile(fd){
       '<a class="mob-card-btn" href="https://www.google.com/maps/dir/?api=1&destination='+p.lat+','+p.lng+'" target="_blank" rel="noopener" style="text-decoration:none;color:var(--pri)">🧭 導航</a></div></div>';
   }).join('')+(fd.length>lim?'<div style="text-align:center;padding:16px;color:var(--g400);font-size:.78rem">還有'+(fd.length-lim)+'筆，請搜尋篩選</div>':'');
 }
-function render(){var fd=sortData(filterData());renderDesktop(fd);renderMobile(fd);}
+function hasActiveFilters(){return cNear||cDist!=='all'||cType!=='all'||cS!==''||cPH!==''||cPM!==''||cMonthOnly;}
+function render(){
+  var fd=sortData(filterData());
+  renderDesktop(fd);
+  renderMobile(fd);
+  var has=hasActiveFilters();
+  var cb=document.getElementById('clearFiltersBtn');if(cb)cb.style.display=has?'':'none';
+  var mcb=document.getElementById('mobClearFiltersBtn');if(mcb)mcb.style.display=has?'':'none';
+}
 function rebuildDist(){
   var dN={};D.forEach(function(p){dN[p.areaname]=(dN[p.areaname]||0)+1;});
   var sD=Object.entries(dN).sort(function(a,b){return b[1]-a[1];});
@@ -441,10 +463,9 @@ document.getElementById('tc').textContent=D.length;
 
 function switchCity(city){
   if(city===currentCity)return;
-  document.querySelectorAll('.city-tab').forEach(function(x){x.classList.remove('on');});
-  document.querySelector('.city-tab[data-city="'+city+'"]').classList.add('on');
+  document.querySelectorAll('#citySwitcher .chip').forEach(function(x){x.classList.remove('on');});
+  var ct=document.querySelector('#citySwitcher .chip[data-city="'+city+'"]');if(ct)ct.classList.add('on');
   currentCity=city;
-  document.getElementById('cityLabel').textContent=CITIES[city].label;
   cDist='all';cType='all';cS='';cPH='';cPM='';cMonthOnly=false;cNear=false;aId=null;
   document.getElementById('si').value='';
   resetAllFilters();
@@ -464,8 +485,10 @@ function switchCity(city){
     document.head.appendChild(s);
   }
 }
-document.getElementById('cityTabs').onclick=function(e){var t=e.target.closest('.city-tab');if(t)switchCity(t.dataset.city);};
+document.getElementById('citySwitcher').onclick=function(e){var t=e.target.closest('.chip');if(t&&t.dataset.city)switchCity(t.dataset.city);};
 function resetAllFilters(){
+  cDist='all';cType='all';cS='';cPH='';cPM='';cMonthOnly=false;cNear=false;
+  document.getElementById('si').value='';
   document.querySelectorAll('#typeChips .chip').forEach(function(x){x.classList.remove('on');});
   document.querySelector('#typeChips .chip[data-t="all"]').classList.add('on');
   document.getElementById('priceHalf').value='';
@@ -484,6 +507,8 @@ function resetAllFilters(){
 }
 
 document.getElementById('si').oninput=function(e){cS=e.target.value.trim().toLowerCase();render();};
+document.getElementById('clearFiltersBtn').onclick=function(){cDist='all';cType='all';cS='';cPH='';cPM='';cMonthOnly=false;cNear=false;resetAllFilters();render();};
+document.getElementById('mobClearFiltersBtn').onclick=function(){cDist='all';cType='all';cS='';cPH='';cPM='';cMonthOnly=false;cNear=false;resetAllFilters();render();};
 document.getElementById('sortSel').onchange=function(e){cSort=e.target.value;document.getElementById('mobSortSel').value=e.target.value;render();};
 document.getElementById('mobSortSel').onchange=function(e){cSort=e.target.value;document.getElementById('sortSel').value=e.target.value;render();};
 document.getElementById('distChips').onclick=function(e){var t=e.target.closest('.chip');if(!t)return;document.querySelectorAll('#distChips .chip').forEach(function(x){x.classList.remove('on');});t.classList.add('on');cDist=t.dataset.d;render();};
@@ -562,15 +587,6 @@ function openType(){document.getElementById('typeBg').classList.add('show');docu
 function closeType(){document.getElementById('typeBg').classList.remove('show');document.getElementById('typePm').classList.remove('show');var tc=document.getElementById('mobTypeChip');if(cType!=='all'){tc.classList.add('on');tc.textContent='🏢 '+cType;}else{tc.classList.remove('on');tc.textContent='🏢 類型';}render();}
 document.getElementById('typeBg').onclick=closeType;document.getElementById('typeDone').onclick=closeType;
 document.getElementById('typeOpts').onclick=function(e){var o=e.target.closest('.pm-opt');if(!o)return;document.querySelectorAll('#typeOpts .pm-opt').forEach(function(x){x.classList.remove('on');});o.classList.add('on');cType=o.dataset.v;};
-var mobShow='map';
-document.getElementById('mobToggle').onclick=function(){
-  mobShow=mobShow==='map'?'list':'map';
-  var l=document.getElementById('layout'),b=document.getElementById('mobToggle');
-  l.classList.remove('show-list','show-map');
-  l.classList.add(mobShow==='list'?'show-list':'show-map');
-  b.textContent=mobShow==='list'?'🗺️ 切換地圖':'📋 切換列表';
-  if(mobShow==='map'&&map)setTimeout(function(){map.invalidateSize();},100);
-};
 
 function initGeo(){
   if(!navigator.geolocation)return;
@@ -595,7 +611,7 @@ function initGeo(){
   );
 }
 
-initMap();
+if(!isMobile)initMap();
 render();
 initGeo();
 })();

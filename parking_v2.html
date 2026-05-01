@@ -1,0 +1,1181 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>ParkNow.TW — 停車場查詢（桌機版）</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css"/>
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css"/>
+<style>
+/* ── CSS 設計系統 ── */
+:root {
+  --bg-primary:    #ffffff;
+  --bg-secondary:  #fafafa;
+  --bg-surface:    #f4f4f5;
+  --border-color:  #ebebeb;
+  --text-primary:  #111111;
+  --text-secondary:#666666;
+  --text-muted:    #aaaaaa;
+  --accent:        #3b82f6;
+  --accent-light:  #eff6ff;
+  --accent-border: #bfdbfe;
+  --accent-text:   #1d4ed8;
+  --pin-monthly:   #f97316;
+  --available-ok:  #10b981;
+  --available-warn:#f97316;
+  --navbar-h:      48px;
+  --filterbar-h:   36px;
+  --cardstrip-h:   110px;
+}
+[data-theme="dark"] {
+  /* 背景層次：深藍黑底 → 卡片明顯較亮 */
+  --bg-primary:    #1a2332;   /* 卡片、navbar、filterbar — 明顯比背景亮 */
+  --bg-secondary:  #0d1117;   /* 頁面底色 — 最深 */
+  --bg-surface:    #243044;   /* 輸入框、select 背景 */
+  --border-color:  #2d3f55;   /* 卡片邊框 — 清楚可見 */
+  --text-primary:  #f0f6fc;   /* 主文字 — 高對比白 */
+  --text-secondary:#8b9ab0;   /* 次要文字 */
+  --text-muted:    #4d6070;   /* 輔助文字 */
+  --accent:        #3b82f6;
+  --accent-light:  #1a3a6b;   /* 選中卡片背景 */
+  --accent-border: #3b82f6;   /* 選中卡片邊框 */
+  --accent-text:   #60a5fa;
+}
+
+/* ── Reset ── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: 'Noto Sans TC', -apple-system, 'PingFang TC', sans-serif;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Navbar ── */
+#navbar {
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  height: var(--navbar-h);
+  background: var(--bg-primary);
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.nav-left { display: flex; align-items: center; flex-shrink: 0; }
+.logo { font-size: 1.1rem; font-weight: 700; color: var(--text-primary); white-space: nowrap; }
+.logo-tw { color: var(--text-secondary); font-weight: 400; }
+.nav-center { flex: 1; display: flex; align-items: center; position: relative; max-width: 480px; }
+.search-wrap { display: flex; align-items: center; width: 100%; gap: 4px; position: relative; }
+#addressSearch {
+  flex: 1;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  font-size: .82rem;
+  font-family: inherit;
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  outline: none;
+  transition: border-color .15s;
+}
+#addressSearch:focus { border-color: var(--accent); background: var(--bg-primary); }
+#searchBtn {
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: .82rem;
+  transition: all .15s;
+  flex-shrink: 0;
+}
+#searchBtn:hover { border-color: var(--accent); background: var(--accent-light); }
+#searchMsg {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  font-size: .75rem;
+  padding: 4px 8px;
+  border-radius: 4px;
+  display: none;
+  z-index: 1001;
+  white-space: nowrap;
+}
+#searchMsg.search-msg--error { display: block; background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; }
+#searchMsg.search-msg--success { display: block; background: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0; }
+.nav-right { display: flex; align-items: center; gap: 6px; flex-shrink: 0; margin-left: auto; }
+#citySel {
+  height: 30px;
+  padding: 0 6px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  font-size: .8rem;
+  font-family: inherit;
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  cursor: pointer;
+  outline: none;
+}
+#citySel:hover { border-color: var(--accent); }
+.btn-icon {
+  height: 30px;
+  min-width: 30px;
+  padding: 0 8px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: .9rem;
+  transition: all .15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.btn-icon:hover { border-color: var(--accent); background: var(--accent-light); }
+
+/* ── Filter Bar ── */
+#filterBar {
+  position: sticky;
+  top: var(--navbar-h);
+  z-index: 999;
+  height: var(--filterbar-h);
+  background: var(--bg-primary);
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  gap: 6px;
+  overflow-x: auto;
+  flex-shrink: 0;
+}
+#filterBar::-webkit-scrollbar { height: 0; }
+.filter-selects { display: flex; align-items: center; gap: 5px; flex-shrink: 0; }
+#filterBar select {
+  height: 26px;
+  padding: 0 6px;
+  border: 1px solid var(--border-color);
+  border-radius: 5px;
+  font-size: .75rem;
+  font-family: inherit;
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  cursor: pointer;
+  outline: none;
+  white-space: nowrap;
+}
+#filterBar select:hover { border-color: var(--accent); }
+.filter-pills { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+.pill {
+  height: 26px;
+  padding: 0 10px;
+  border: 1.5px solid var(--border-color);
+  border-radius: 13px;
+  font-size: .75rem;
+  font-family: inherit;
+  background: var(--bg-primary);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all .15s;
+  white-space: nowrap;
+}
+.pill:hover { border-color: var(--accent); color: var(--accent); }
+.pill.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+.filter-meta { margin-left: auto; flex-shrink: 0; }
+#resultCount { font-size: .72rem; color: var(--text-muted); white-space: nowrap; }
+.day-label {
+  font-size: .68rem;
+  padding: 2px 7px;
+  border-radius: 10px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.day-label.holiday { background: #fff7ed; color: #c2410c; }
+.day-label.weekday { background: var(--accent-light); color: var(--accent-text); }
+[data-theme="dark"] .day-label.holiday { background: rgba(249,115,22,.2); color: #fb923c; }
+[data-theme="dark"] .day-label.weekday { background: var(--accent-light); color: var(--accent-text); }
+
+/* ── Map Wrap ── */
+#mapWrap {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+}
+#map { width: 100%; height: 100%; }
+.map-legend {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 500;
+  background: rgba(255,255,255,.95);
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: .72rem;
+  box-shadow: 0 2px 8px rgba(0,0,0,.12);
+  backdrop-filter: blur(4px);
+}
+[data-theme="dark"] .map-legend { background: rgba(26,35,50,.97); color: var(--text-primary); border: 1px solid var(--border-color); }
+.legend-item { display: flex; align-items: center; gap: 6px; margin: 2px 0; }
+.legend-dot { width: 10px; height: 10px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 0 3px rgba(0,0,0,.2); flex-shrink: 0; }
+
+/* ── Card Strip ── */
+#cardStrip {
+  height: var(--cardstrip-h);
+  background: var(--bg-primary);
+  border-top: 1px solid var(--border-color);
+  display: flex;
+  align-items: stretch;
+  overflow-x: auto;
+  overflow-y: hidden;
+  gap: 0;
+  flex-shrink: 0;
+  padding: 6px 8px;
+  gap: 6px;
+}
+#cardStrip::-webkit-scrollbar { height: 4px; }
+#cardStrip::-webkit-scrollbar-track { background: var(--bg-surface); }
+#cardStrip::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 2px; }
+.card {
+  min-width: 180px;
+  max-width: 200px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 8px 10px;
+  cursor: pointer;
+  transition: all .15s;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex-shrink: 0;
+}
+.card:hover { background: var(--accent-light); border-color: var(--accent-border); }
+.card.active { border-left: 3px solid var(--accent); background: var(--accent-light); }
+.card-name { font-size: .8rem; font-weight: 600; color: var(--text-primary); line-height: 1.3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.card-meta { display: flex; gap: 5px; font-size: .68rem; color: var(--text-secondary); flex-wrap: wrap; }
+.card-dist { color: var(--available-ok); font-weight: 600; }
+.card-vacancy { font-size: .65rem; font-weight: 600; padding: 1px 4px; border-radius: 4px; }
+.vac-ok { background: #d1fae5; color: #065f46; }
+.vac-warn { background: #fff7ed; color: #c2410c; }
+.vac-na { background: var(--bg-surface); color: var(--text-muted); }
+.card-rate { font-size: .7rem; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.card-more { font-size: .72rem; color: var(--text-muted); padding: 8px 12px; display: flex; align-items: center; white-space: nowrap; flex-shrink: 0; }
+
+/* ── List Panel (map collapsed) ── */
+#listPanel {
+  display: none;
+  flex: 1;
+  overflow-y: auto;
+  background: var(--bg-secondary);
+  padding: 8px;
+}
+.list-card {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin-bottom: 6px;
+  cursor: default;
+}
+.list-card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 6px; }
+.list-card-name { font-size: .9rem; font-weight: 600; color: var(--text-primary); }
+.list-card-badges { display: flex; gap: 4px; }
+.badge { font-size: .62rem; padding: 2px 7px; border-radius: 5px; font-weight: 600; }
+.badge-type { background: var(--accent-light); color: var(--accent-text); }
+.badge-monthly { background: #fff7ed; color: #c2410c; }
+.list-card-meta { display: flex; gap: 10px; font-size: .75rem; color: var(--text-secondary); margin-bottom: 6px; flex-wrap: wrap; }
+.list-card-rate { font-size: .75rem; color: var(--text-secondary); line-height: 1.6; margin-bottom: 8px; }
+.list-card-rate .hl { color: var(--pin-monthly); font-weight: 600; }
+.list-card-actions { display: flex; justify-content: flex-end; }
+.btn-nav {
+  font-size: .75rem;
+  color: var(--accent-text);
+  text-decoration: none;
+  padding: 4px 12px;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  transition: all .15s;
+  background: var(--bg-primary);
+}
+.btn-nav:hover { background: var(--accent); color: #fff; }
+
+/* ── No Results / Error ── */
+.no-results {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  color: var(--text-muted);
+  font-size: .8rem;
+  gap: 6px;
+  min-width: 200px;
+  flex-shrink: 0;
+}
+.no-results-icon { font-size: 1.5rem; }
+.list-error {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 12px 16px;
+  background: #fef2f2;
+  color: #dc2626;
+  border-radius: 8px;
+  font-size: .8rem;
+  min-width: 200px;
+  flex-shrink: 0;
+}
+[data-theme="dark"] .list-error { background: rgba(220,38,38,.15); }
+
+/* ── Popup ── */
+.leaflet-popup-content { font-family: 'Noto Sans TC', sans-serif; max-width: 280px; padding: 2px; }
+.pop-name { font-size: .95rem; font-weight: 600; color: #111; margin-bottom: 6px; }
+.pop-row { font-size: .78rem; color: #555; line-height: 1.7; }
+.pop-rate { font-size: .75rem; background: #f9fafb; padding: 6px 8px; border-radius: 6px; margin-top: 6px; line-height: 1.6; color: #555; }
+.pop-rate .hl { color: #f97316; font-weight: 600; }
+.pop-btn { display: inline-block; margin-top: 8px; padding: 5px 14px; background: #3b82f6; color: #fff !important; border-radius: 6px; text-decoration: none; font-size: .78rem; font-weight: 500; }
+.pop-btn:hover { background: #2563eb; }
+
+/* ── Geo message ── */
+#geoMsg {
+  display: none;
+  position: fixed;
+  bottom: calc(var(--cardstrip-h) + 10px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0,0,0,.75);
+  color: #fff;
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: .78rem;
+  z-index: 2000;
+  white-space: nowrap;
+}
+#geoMsg.show { display: block; }
+</style>
+</head>
+<body>
+<!-- ── Navbar ── -->
+<nav id="navbar">
+  <div class="nav-left">
+    <div class="logo">ParkNow<span class="logo-tw">.TW</span></div>
+  </div>
+  <div class="nav-center">
+    <div class="search-wrap">
+      <input type="text" id="addressSearch" placeholder="輸入地址搜尋附近停車場..." autocomplete="off" aria-label="地址搜尋">
+      <button id="searchBtn" aria-label="搜尋">🔍</button>
+      <div id="searchMsg" class="search-msg" aria-live="polite"></div>
+    </div>
+  </div>
+  <div class="nav-right">
+    <button id="themeToggle" class="btn-icon" aria-label="切換日夜模式">🌙</button>
+    <button id="mapToggleBtn" class="btn-icon" aria-label="收合地圖">🗺️</button>
+  </div>
+</nav>
+
+<!-- ── Filter Bar ── -->
+<div id="filterBar">
+  <div class="filter-selects">
+    <select id="citySel" aria-label="城市切換">
+      <option value="kaohsiung">高雄</option>
+      <option value="tainan">台南</option>
+      <option value="chiayi">嘉義</option>
+    </select>
+    <select id="districtSel" aria-label="行政區篩選">
+      <option value="">全部行政區</option>
+    </select>
+    <select id="rateSelect" aria-label="計時費率篩選">
+      <option value="">計時費率（不限）</option>
+      <option value="10">≤10元/半hr</option>
+      <option value="15">≤15元/半hr</option>
+      <option value="20">≤20元/半hr</option>
+      <option value="25">≤25元/半hr</option>
+      <option value="30">≤30元/半hr</option>
+      <option value="50">≤50元/半hr</option>
+    </select>
+    <select id="monthlySelect" aria-label="月租費用篩選">
+      <option value="">月租費用（不限）</option>
+      <option value="1000">≤1千</option>
+      <option value="1500">≤1.5千</option>
+      <option value="2000">≤2千</option>
+      <option value="3000">≤3千</option>
+      <option value="5000">≤5千</option>
+    </select>
+    <select id="distSelect" aria-label="距離篩選">
+      <option value="">距離（不限）</option>
+      <option value="1">1km 以內</option>
+      <option value="2">2km 以內</option>
+      <option value="5">5km 以內</option>
+    </select>
+    <select id="typeSelect" aria-label="類型篩選">
+      <option value="">全部類型</option>
+      <option value="平面">平面</option>
+      <option value="立體">立體</option>
+    </select>
+  </div>
+  <div class="filter-pills">
+    <button class="pill" id="vacancyPill">有空位</button>
+    <button class="pill" id="monthlyPill">月租</button>
+    <button class="pill" id="cubePill">立體</button>
+  </div>
+  <div class="filter-meta">
+    <span id="resultCount">0 筆結果</span>
+    <span id="dayLabel" class="day-label"></span>
+  </div>
+</div>
+
+<!-- ── Map Wrap ── -->
+<div id="mapWrap">
+  <div id="map"></div>
+  <div class="map-legend">
+    <div class="legend-item">
+      <span class="legend-dot" style="background:#3b82f6"></span>一般停車場
+    </div>
+    <div class="legend-item">
+      <span class="legend-dot" style="background:#f97316"></span>有月租方案
+    </div>
+  </div>
+</div>
+
+<!-- ── Card Strip ── -->
+<div id="cardStrip"></div>
+
+<!-- ── List Panel (map collapsed) ── -->
+<div id="listPanel"></div>
+
+<!-- ── Geo Message ── -->
+<div id="geoMsg"></div>
+
+<!-- ── Scripts ── -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+<script src="parking_data.js"></script>
+<script>
+(function() {
+'use strict';
+
+/* ── 城市設定 ── */
+var CITIES = {
+  kaohsiung: { label: '高雄', varName: 'PARKING_DATA',       file: null,             center: [22.6273, 120.3014], zoom: 12 },
+  tainan:    { label: '台南', varName: 'PARKING_DATA_TAINAN', file: 'data_tainan.js', center: [22.9999, 120.2269], zoom: 12 },
+  chiayi:    { label: '嘉義', varName: 'PARKING_DATA_CHIAYI', file: 'data_chiayi.js', center: [23.4801, 120.4491], zoom: 12 }
+};
+
+/* ── 全域狀態 ── */
+var D = (typeof PARKING_DATA !== 'undefined') ? PARKING_DATA : [];
+var CITY_CACHE = { kaohsiung: D.length ? D : null };
+var currentCity = 'kaohsiung';
+var mapCollapsed = false;
+var map, tileLayer, cg;
+var ICON_NORMAL, ICON_MONTHLY;
+var markerMap = {};
+
+var refCoord = { lat: null, lng: null, source: null };
+
+var filterState = {
+  cDistrict: '',
+  cType: '',
+  cPH: '',
+  cPM: '',
+  cDistKm: '',
+  cVacancy: false,
+  cMonthly: false,
+  cCube: false
+};
+
+/* ── 工具函式 ── */
+function esc(s) {
+  if (!s) return '';
+  var d = document.createElement('div');
+  d.textContent = String(s);
+  return d.innerHTML;
+}
+
+function hlM(text) {
+  if (!text) return '';
+  return text.replace(/(月租|計月|每月)/g, '<span class="hl">$1</span>');
+}
+
+function calcDist(lat1, lng1, lat2, lng2) {
+  var R = 6371000;
+  var dLat = (lat2 - lat1) * Math.PI / 180;
+  var dLng = (lng2 - lng1) * Math.PI / 180;
+  var a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+          Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+          Math.sin(dLng/2) * Math.sin(dLng/2);
+  var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  return R * c;
+}
+
+function fmtDist(m) {
+  if (m === undefined || m === null) return '';
+  if (m < 1000) return Math.round(m) + 'm';
+  return (m / 1000).toFixed(1) + 'km';
+}
+
+function buildNavUrl(p) {
+  return 'https://www.google.com/maps/dir/?api=1&destination=' + p.lat + ',' + p.lng;
+}
+
+function buildNominatimUrl(address) {
+  return 'https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=tw&q=' + encodeURIComponent(address);
+}
+
+/* ── 假日判斷（含國定假日 API）── */
+var _holidayCache = null; // { year: 2025, dates: Set{'20250101', ...} }
+
+function isHoliday(dateStr) {
+  // dateStr 格式 'YYYYMMDD'，不傳則用今天
+  if (!dateStr) {
+    var now = new Date();
+    var y = now.getFullYear();
+    var m = String(now.getMonth() + 1).padStart(2, '0');
+    var d = String(now.getDate()).padStart(2, '0');
+    dateStr = '' + y + m + d;
+  }
+  // 先查快取
+  if (_holidayCache && _holidayCache.dates.has(dateStr)) return true;
+  // 快取未命中時，fallback 到週六日判斷
+  var day = new Date(
+    parseInt(dateStr.slice(0,4)),
+    parseInt(dateStr.slice(4,6)) - 1,
+    parseInt(dateStr.slice(6,8))
+  ).getDay();
+  return day === 0 || day === 6;
+}
+
+function loadHolidayData() {
+  var year = new Date().getFullYear();
+  // 若快取已有今年資料則跳過
+  if (_holidayCache && _holidayCache.year === year) return;
+  var url = 'https://cdn.jsdelivr.net/gh/ruyut/TaiwanCalendar/data/' + year + '.json';
+  fetch(url)
+    .then(function(res) { return res.json(); })
+    .then(function(data) {
+      var dates = new Set();
+      data.forEach(function(item) {
+        if (item.isHoliday) dates.add(item.date);
+      });
+      _holidayCache = { year: year, dates: dates };
+      // 資料載入後重新解析費率（因為假日判斷結果可能改變）並重新渲染
+      parseData(D);
+      render();
+      // 更新 day label
+      updateDayLabel();
+    })
+    .catch(function() {
+      // 載入失敗時 isHoliday() 會 fallback 到週六日判斷，不影響功能
+    });
+}
+
+function updateDayLabel() {
+  var dayEl = document.getElementById('dayLabel');
+  if (!dayEl) return;
+  var holiday = isHoliday();
+  dayEl.textContent = holiday ? '📅 假日費率' : '📅 平日費率';
+  dayEl.className = 'day-label ' + (holiday ? 'holiday' : 'weekday');
+}
+
+/* ── parseData ── */
+function parseData(arr) {
+  var holiday = isHoliday();
+  arr.forEach(function(p) {
+    var cw = (p.chargeway || '').replace(/,/g, '');
+
+    // _hh: 每半小時費率，依平日/假日選擇對應費率
+    if (holiday) {
+      // 假日：優先抓「假日：每半小時N元」或「假日每半小時N元」
+      var mHoliday = cw.match(/假日[^。；]*每半小時(\d+)元/) ||
+                     cw.match(/假日[：:]\s*每半小時(\d+)元/) ||
+                     cw.match(/\(2\)[^。；]*每半小時(\d+)元/);
+      if (mHoliday) {
+        p._hh = parseInt(mHoliday[1], 10);
+      } else {
+        // 沒有明確假日費率，fallback 到通用費率
+        var mHH = cw.match(/每半小時(\d+)元/);
+        p._hh = mHH ? parseInt(mHH[1], 10) : null;
+      }
+    } else {
+      // 平日：優先抓「平日：每半小時N元」或「平日每半小時N元」
+      var mWeekday = cw.match(/平日[^。；]*每半小時(\d+)元/) ||
+                     cw.match(/平日[：:]\s*每半小時(\d+)元/) ||
+                     cw.match(/\(1\)[^。；]*每半小時(\d+)元/);
+      if (mWeekday) {
+        p._hh = parseInt(mWeekday[1], 10);
+      } else {
+        // 沒有明確平日費率，fallback 到通用費率
+        var mHH2 = cw.match(/每半小時(\d+)元/);
+        p._hh = mHH2 ? parseInt(mHH2[1], 10) : null;
+      }
+    }
+
+    // _mo: 月租費用
+    var mMO = cw.match(/(?:每月|月租[：:]?)\s*([\d]+)\s*元/) ||
+              cw.match(/計月[收費：:]*(?:每月)?\s*([\d]+)\s*元/);
+    p._mo = mMO ? parseInt(mMO[1], 10) : null;
+    // _hm: 是否有月租
+    p._hm = /月租|計月|每月/.test(p.chargeway || '');
+  });
+}
+
+/* ── recalcDist ── */
+function recalcDist() {
+  if (refCoord.lat === null || refCoord.lng === null) return;
+  D.forEach(function(p) {
+    var la = parseFloat(p.lat), lo = parseFloat(p.lng);
+    if (!isNaN(la) && !isNaN(lo)) {
+      p._dist = calcDist(refCoord.lat, refCoord.lng, la, lo);
+    }
+  });
+}
+
+function updateRefCoord(lat, lng, source) {
+  refCoord.lat = lat;
+  refCoord.lng = lng;
+  refCoord.source = source;
+}
+
+/* ── filterData ── */
+function filterData() {
+  return D.filter(function(p) {
+    if (filterState.cDistrict && p.areaname !== filterState.cDistrict) return false;
+    if (filterState.cType && p.parkingLotType !== filterState.cType) return false;
+    if (filterState.cPH) {
+      if (p._hh === null || p._hh > parseInt(filterState.cPH, 10)) return false;
+    }
+    if (filterState.cPM) {
+      if (p._mo === null || p._mo > parseInt(filterState.cPM, 10)) return false;
+    }
+    if (filterState.cDistKm) {
+      var km = parseFloat(filterState.cDistKm);
+      if (p._dist === undefined || p._dist > km * 1000) return false;
+    }
+    if (filterState.cVacancy) {
+      if (!(parseInt(p.smallcarVacancy, 10) > 0)) return false;
+    }
+    if (filterState.cMonthly) {
+      if (!p._hm) return false;
+    }
+    if (filterState.cCube) {
+      if (p.parkingLotType !== '立體') return false;
+    }
+    return true;
+  });
+}
+
+/* ── sortData ── */
+function sortData(fd) {
+  return fd.slice().sort(function(a, b) {
+    if (a._dist !== undefined && b._dist !== undefined) return a._dist - b._dist;
+    if (a._dist !== undefined) return -1;
+    if (b._dist !== undefined) return 1;
+    return (a.name || '').localeCompare(b.name || '');
+  });
+}
+
+/* ── Leaflet 初始化 ── */
+var TILE_DAY_URL   = 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
+var TILE_NIGHT_URL = 'https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}{r}.png?api_key=f6bc3efb-74cd-4d49-b0ef-c20a0aef4717';
+
+
+function initMap() {
+  map = L.map('map', { zoomControl: true });
+  tileLayer = L.tileLayer(TILE_DAY_URL, {
+    attribution: '© <a href="https://carto.com/">CartoDB</a> © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+    maxZoom: 19,
+    subdomains: 'abcd'
+  }).addTo(map);
+
+  cg = L.markerClusterGroup({ maxClusterRadius: 45, spiderfyOnMaxZoom: true });
+  map.addLayer(cg);
+
+  ICON_NORMAL  = makeIcon('#3b82f6');
+  ICON_MONTHLY = makeIcon('#f97316');
+
+  var cfg = CITIES[currentCity];
+  map.setView(cfg.center, cfg.zoom);
+}
+
+function makeIcon(color) {
+  return L.divIcon({
+    className: '',
+    html: '<div style="width:14px;height:14px;border-radius:50%;background:' + color +
+          ';border:2.5px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.35)"></div>',
+    iconSize: [14, 14],
+    iconAnchor: [7, 7]
+  });
+}
+
+function swapTileLayer(isDark) {
+  map.removeLayer(tileLayer);
+  var attr = isDark
+    ? '© <a href="https://stadiamaps.com/">Stadia Maps</a> © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+    : '© <a href="https://carto.com/">CartoDB</a> © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>';
+  tileLayer = L.tileLayer(isDark ? TILE_NIGHT_URL : TILE_DAY_URL, {
+    attribution: attr,
+    maxZoom: 20,
+    subdomains: isDark ? '' : 'abcd'
+  }).addTo(map);
+}
+
+/* ── renderMarkers ── */
+function renderMarkers(fd) {
+  cg.clearLayers();
+  markerMap = {};
+  fd.forEach(function(p) {
+    var la = parseFloat(p.lat), lo = parseFloat(p.lng);
+    if (isNaN(la) || isNaN(lo)) return;
+    var marker = L.marker([la, lo], { icon: p._hm ? ICON_MONTHLY : ICON_NORMAL });
+    marker.bindPopup(buildPopup(p), { maxWidth: 300 });
+    marker.on('click', function() {
+      setActiveCard(p.id);
+      var card = document.querySelector('.card[data-id="' + p.id + '"]');
+      if (card) card.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+    });
+    markerMap[p.id] = marker;
+    cg.addLayer(marker);
+  });
+}
+
+function buildPopup(p) {
+  var navUrl = buildNavUrl(p);
+  var rateText = p.chargeway ? hlM(esc(p.chargeway)) : '費率未提供';
+  return '<div class="pop-name">' + esc(p.name) + '</div>' +
+    '<div class="pop-row">📍 ' + esc(p.areaname) + ' — ' + esc(p.location) + '</div>' +
+    '<div class="pop-row">🚗 車位 ' + (esc(p.volumn) || '—') + ' 格 ｜ ' + esc(p.parkingLotType || '') + '</div>' +
+    '<div class="pop-row">🕐 ' + (esc(p.businesshours) || '—') + '</div>' +
+    (p.telephone ? '<div class="pop-row">📞 ' + esc(p.telephone) + '</div>' : '') +
+    '<div class="pop-rate">' + rateText + '</div>' +
+    '<a class="pop-btn" href="' + navUrl + '" target="_blank" rel="noopener">🧭 導航前往</a>';
+}
+
+function openPopupForId(id) {
+  var marker = markerMap[id];
+  if (marker) {
+    marker.openPopup();
+  }
+}
+
+/* ── setActiveCard ── */
+function setActiveCard(id) {
+  document.querySelectorAll('.card').forEach(function(c) { c.classList.remove('active'); });
+  var target = document.querySelector('.card[data-id="' + id + '"]');
+  if (target) target.classList.add('active');
+}
+
+/* ── renderEmpty ── */
+function renderEmpty(container) {
+  container.innerHTML =
+    '<div class="no-results">' +
+    '<div class="no-results-icon">🔍</div>' +
+    '<div>找不到符合條件的停車場</div>' +
+    '</div>';
+}
+
+/* ── showListError ── */
+function showListError(msg) {
+  var html = '<div class="list-error"><span>⚠️</span> ' + msg + '</div>';
+  document.getElementById('cardStrip').innerHTML = html;
+  var lp = document.getElementById('listPanel');
+  if (lp) lp.innerHTML = html;
+}
+
+/* ── renderCards ── */
+function renderCards(fd) {
+  var strip = document.getElementById('cardStrip');
+  document.getElementById('resultCount').textContent = fd.length + ' 筆結果';
+  if (fd.length === 0) {
+    renderEmpty(strip);
+    return;
+  }
+  var MAX = 200;
+  var html = '';
+  var shown = Math.min(fd.length, MAX);
+  for (var i = 0; i < shown; i++) {
+    var p = fd[i];
+    var vacNum = parseInt(p.smallcarVacancy, 10);
+    var vacClass = vacNum > 0 ? 'vac-ok' : (vacNum === -2 ? 'vac-na' : 'vac-warn');
+    var vacText = vacNum > 0 ? vacNum + '位' : (vacNum === -2 ? '未提供' : (vacNum === -1 ? '不適用' : '滿'));
+    var distStr = p._dist !== undefined ? fmtDist(p._dist) : '';
+    var rateStr = '';
+    if (p._hh) rateStr += '⏱' + p._hh + '元/半hr ';
+    if (p._mo) rateStr += '💰月租' + p._mo + '元';
+    if (!rateStr) rateStr = '費率未提供';
+    html += '<div class="card" data-id="' + esc(p.id) + '">' +
+      '<div class="card-name">' + esc(p.name) + '</div>' +
+      '<div class="card-meta">' +
+        (distStr ? '<span class="card-dist">' + distStr + '</span>' : '') +
+        '<span>' + esc(p.areaname) + '</span>' +
+        '<span class="card-vacancy ' + vacClass + '">' + vacText + '</span>' +
+      '</div>' +
+      '<div class="card-rate">' + esc(rateStr) + '</div>' +
+      '</div>';
+  }
+  if (fd.length > MAX) {
+    html += '<div class="card-more">還有 ' + (fd.length - MAX) + ' 筆，請篩選縮小範圍</div>';
+  }
+  strip.innerHTML = html;
+
+  // 綁定卡片點擊事件
+  strip.querySelectorAll('.card').forEach(function(card) {
+    card.addEventListener('click', function() {
+      var id = this.dataset.id;
+      var p = D.find(function(x) { return x.id === id; });
+      if (!p) return;
+      var la = parseFloat(p.lat), lo = parseFloat(p.lng);
+      if (!isNaN(la) && !isNaN(lo)) {
+        map.setView([la, lo], 17);
+        openPopupForId(id);
+      }
+      setActiveCard(id);
+    });
+  });
+}
+
+/* ── renderListPanel ── */
+function renderListPanel(fd) {
+  var panel = document.getElementById('listPanel');
+  document.getElementById('resultCount').textContent = fd.length + ' 筆結果';
+  if (fd.length === 0) {
+    renderEmpty(panel);
+    return;
+  }
+  var MAX = 200;
+  var html = '';
+  var shown = Math.min(fd.length, MAX);
+  for (var i = 0; i < shown; i++) {
+    var p = fd[i];
+    var vacNum = parseInt(p.smallcarVacancy, 10);
+    var vacText = vacNum > 0 ? vacNum + '位空位' : (vacNum === -2 ? '未提供' : (vacNum === -1 ? '不適用' : '已滿'));
+    var distStr = p._dist !== undefined ? fmtDist(p._dist) : '';
+    var rateText = p.chargeway ? hlM(esc(p.chargeway)) : '費率未提供';
+    html += '<div class="list-card">' +
+      '<div class="list-card-header">' +
+        '<div class="list-card-name">' + esc(p.name) + '</div>' +
+        '<div class="list-card-badges">' +
+          '<span class="badge badge-type">' + esc(p.parkingLotType || '') + '</span>' +
+          (p._hm ? '<span class="badge badge-monthly">月租</span>' : '') +
+        '</div>' +
+      '</div>' +
+      '<div class="list-card-meta">' +
+        '<span>📍 ' + esc(p.areaname) + '</span>' +
+        (distStr ? '<span>' + distStr + '</span>' : '') +
+        '<span>�� ' + (esc(p.volumn) || '—') + '格 ' + vacText + '</span>' +
+        '<span>🕐 ' + (esc(p.businesshours) || '—') + '</span>' +
+      '</div>' +
+      '<div class="list-card-rate">' + rateText + '</div>' +
+      '<div class="list-card-actions">' +
+        '<a class="btn-nav" href="' + buildNavUrl(p) + '" target="_blank" rel="noopener">🧭 導航前往</a>' +
+      '</div>' +
+      '</div>';
+  }
+  if (fd.length > MAX) {
+    html += '<div style="text-align:center;padding:12px;font-size:.75rem;color:var(--text-muted)">還有 ' + (fd.length - MAX) + ' 筆，請篩選縮小範圍</div>';
+  }
+  panel.innerHTML = html;
+}
+
+/* ── render 主流程 ── */
+function render() {
+  var fd = filterData();
+  var sorted = sortData(fd);
+  if (mapCollapsed) {
+    renderListPanel(sorted);
+  } else {
+    renderCards(sorted);
+    renderMarkers(sorted);
+  }
+}
+
+/* ── 地圖收合 ── */
+function toggleMap() {
+  mapCollapsed = !mapCollapsed;
+  document.getElementById('mapWrap').style.display   = mapCollapsed ? 'none' : '';
+  document.getElementById('cardStrip').style.display = mapCollapsed ? 'none' : '';
+  document.getElementById('listPanel').style.display = mapCollapsed ? '' : 'none';
+  document.getElementById('mapToggleBtn').textContent = mapCollapsed ? '📋' : '🗺️';
+  if (!mapCollapsed) {
+    setTimeout(function() { map.invalidateSize(); }, 50);
+  }
+  render();
+}
+
+/* ── 日夜切換 ── */
+function toggleTheme() {
+  var isDark = document.documentElement.dataset.theme === 'dark';
+  document.documentElement.dataset.theme = isDark ? '' : 'dark';
+  document.getElementById('themeToggle').textContent = isDark ? '🌙' : '☀️';
+  swapTileLayer(!isDark);
+}
+
+/* ── 地址搜尋 ── */
+function showSearchMsg(text, type) {
+  var el = document.getElementById('searchMsg');
+  el.textContent = text;
+  el.className = 'search-msg search-msg--' + type;
+  clearTimeout(el._timer);
+  el._timer = setTimeout(function() {
+    el.textContent = '';
+    el.className = 'search-msg';
+  }, 4000);
+}
+
+function searchAddress() {
+  var addr = document.getElementById('addressSearch').value.trim();
+  if (!addr) return;
+  var url = buildNominatimUrl(addr);
+  fetch(url, { headers: { 'User-Agent': 'ParkNow.TW/2.0' } })
+    .then(function(res) { return res.json(); })
+    .then(function(data) {
+      if (!data || data.length === 0) {
+        showSearchMsg('找不到此地址，請重新輸入', 'error');
+        return;
+      }
+      var lat = parseFloat(data[0].lat);
+      var lng = parseFloat(data[0].lon);
+      updateRefCoord(lat, lng, 'search');
+      recalcDist();
+      document.getElementById('distSelect').value = '1';
+      filterState.cDistKm = '1';
+      map.setView([lat, lng], 15);
+      render();
+      showSearchMsg('✓ 已找到地址', 'success');
+    })
+    .catch(function() {
+      showSearchMsg('地址搜尋失敗，請稍後再試', 'error');
+    });
+}
+
+/* ── GPS 位置偵測 ── */
+function showGeoMsg(text, duration) {
+  var el = document.getElementById('geoMsg');
+  el.textContent = text;
+  el.classList.add('show');
+  clearTimeout(el._timer);
+  el._timer = setTimeout(function() { el.classList.remove('show'); }, duration);
+}
+
+function initGeo() {
+  if (!navigator.geolocation) {
+    showGeoMsg('無法取得位置，顯示全部停車場', 4000);
+    render();
+    return;
+  }
+  navigator.geolocation.getCurrentPosition(
+    function(pos) {
+      var lat = pos.coords.latitude;
+      var lng = pos.coords.longitude;
+      updateRefCoord(lat, lng, 'gps');
+      recalcDist();
+      document.getElementById('distSelect').value = '1';
+      filterState.cDistKm = '1';
+      map.setView([lat, lng], 15);
+      showGeoMsg('📍 已取得位置', 3000);
+      render();
+    },
+    function() {
+      showGeoMsg('無法取得位置，顯示全部停車場', 4000);
+      render();
+    },
+    { timeout: 8000 }
+  );
+}
+
+/* ── 城市切換 ── */
+function loadScript(src, onSuccess, onError) {
+  var s = document.createElement('script');
+  s.src = src;
+  s.onload = onSuccess;
+  s.onerror = function() {
+    onError();
+    if (s.parentNode) s.parentNode.removeChild(s);
+  };
+  document.head.appendChild(s);
+}
+
+function rebuildDistrictSelect() {
+  var sel = document.getElementById('districtSel');
+  var areas = [];
+  D.forEach(function(p) {
+    if (p.areaname && areas.indexOf(p.areaname) === -1) areas.push(p.areaname);
+  });
+  areas.sort();
+  var html = '<option value="">全部行政區</option>';
+  areas.forEach(function(a) {
+    html += '<option value="' + esc(a) + '">' + esc(a) + '</option>';
+  });
+  sel.innerHTML = html;
+}
+
+function resetFilters() {
+  filterState.cDistrict = '';
+  filterState.cType = '';
+  filterState.cPH = '';
+  filterState.cPM = '';
+  filterState.cDistKm = '';
+  filterState.cVacancy = false;
+  filterState.cMonthly = false;
+  filterState.cCube = false;
+  document.getElementById('districtSel').value = '';
+  document.getElementById('rateSelect').value = '';
+  document.getElementById('monthlySelect').value = '';
+  document.getElementById('distSelect').value = '';
+  document.getElementById('typeSelect').value = '';
+  document.getElementById('vacancyPill').classList.remove('active');
+  document.getElementById('monthlyPill').classList.remove('active');
+  document.getElementById('cubePill').classList.remove('active');
+  refCoord = { lat: null, lng: null, source: null };
+}
+
+function switchCity(cityKey) {
+  var cfg = CITIES[cityKey];
+  currentCity = cityKey;
+  if (CITY_CACHE[cityKey]) {
+    D = CITY_CACHE[cityKey];
+    resetFilters();
+    rebuildDistrictSelect();
+    render();
+    if (map) map.setView(cfg.center, cfg.zoom);
+  } else {
+    loadScript(cfg.file, function() {
+      D = window[cfg.varName];
+      if (D) {
+        parseData(D);
+        CITY_CACHE[cityKey] = D;
+      } else {
+        D = [];
+      }
+      resetFilters();
+      rebuildDistrictSelect();
+      render();
+      if (map) map.setView(cfg.center, cfg.zoom);
+    }, function() {
+      showListError('資料載入失敗');
+    });
+  }
+}
+
+/* ── 事件綁定 ── */
+function bindEvents() {
+  // 搜尋
+  document.getElementById('searchBtn').addEventListener('click', searchAddress);
+  document.getElementById('addressSearch').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') searchAddress();
+  });
+
+  // 日夜切換
+  document.getElementById('themeToggle').addEventListener('click', toggleTheme);
+
+  // 地圖收合
+  document.getElementById('mapToggleBtn').addEventListener('click', toggleMap);
+
+  // 城市切換
+  document.getElementById('citySel').addEventListener('change', function() {
+    switchCity(this.value);
+  });
+
+  // Filter selects
+  document.getElementById('districtSel').addEventListener('change', function() {
+    filterState.cDistrict = this.value;
+    // 選取行政區時自動取消距離篩選
+    if (this.value) {
+      filterState.cDistKm = '';
+      document.getElementById('distSelect').value = '';
+      // 計算該行政區所有停車場的平均座標，移動地圖
+      if (map) {
+        var lots = D.filter(function(p) { return p.areaname === filterState.cDistrict; });
+        var validLots = lots.filter(function(p) {
+          return !isNaN(parseFloat(p.lat)) && !isNaN(parseFloat(p.lng));
+        });
+        if (validLots.length > 0) {
+          var avgLat = validLots.reduce(function(s, p) { return s + parseFloat(p.lat); }, 0) / validLots.length;
+          var avgLng = validLots.reduce(function(s, p) { return s + parseFloat(p.lng); }, 0) / validLots.length;
+          map.setView([avgLat, avgLng], 14);
+        }
+      }
+    }
+    render();
+  });
+  document.getElementById('rateSelect').addEventListener('change', function() {
+    filterState.cPH = this.value;
+    render();
+  });
+  document.getElementById('monthlySelect').addEventListener('change', function() {
+    filterState.cPM = this.value;
+    render();
+  });
+  document.getElementById('distSelect').addEventListener('change', function() {
+    filterState.cDistKm = this.value;
+    render();
+  });
+  document.getElementById('typeSelect').addEventListener('change', function() {
+    filterState.cType = this.value;
+    render();
+  });
+
+  // Pills
+  document.getElementById('vacancyPill').addEventListener('click', function() {
+    filterState.cVacancy = !filterState.cVacancy;
+    this.classList.toggle('active', filterState.cVacancy);
+    render();
+  });
+  document.getElementById('monthlyPill').addEventListener('click', function() {
+    filterState.cMonthly = !filterState.cMonthly;
+    this.classList.toggle('active', filterState.cMonthly);
+    render();
+  });
+  document.getElementById('cubePill').addEventListener('click', function() {
+    filterState.cCube = !filterState.cCube;
+    this.classList.toggle('active', filterState.cCube);
+    render();
+  });
+}
+
+/* ── 初始化 ── */
+window.addEventListener('DOMContentLoaded', function() {
+  // 初始化地圖
+  initMap();
+
+  // 載入高雄資料
+  if (!D.length) {
+    D = window.PARKING_DATA || [];
+  }
+  parseData(D);
+  CITY_CACHE.kaohsiung = D;
+
+  // 建立行政區選單
+  rebuildDistrictSelect();
+
+  // 設定今日費率標示（先用週六日判斷，國定假日資料載入後自動更新）
+  updateDayLabel();
+
+  // 綁定事件
+  bindEvents();
+
+  // 載入國定假日資料（非同步，載入後自動更新 label）
+  loadHolidayData();
+
+  // GPS 偵測（會呼叫 render）
+  initGeo();
+});
+
+})();
+</script>
+</body>
+</html>

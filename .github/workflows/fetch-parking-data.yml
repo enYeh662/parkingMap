@@ -83,6 +83,21 @@ jobs:
             -H "Authorization: Bearer ${{ steps.token.outputs.token }}" \
             -o /tmp/cyc_avail.json
 
+      # ── Debug：印出各城市 API 回傳的前 500 字元 ───────────────────────
+      - name: Debug raw responses
+        run: |
+          echo "=== Kaohsiung ParkingLot (first 500 chars) ==="
+          head -c 500 /tmp/kh_lot.json || echo "(empty)"
+          echo ""
+          echo "=== Tainan ParkingLot (first 500 chars) ==="
+          head -c 500 /tmp/tn_lot.json || echo "(empty)"
+          echo ""
+          echo "=== Chiayi ParkingLot (first 500 chars) ==="
+          head -c 500 /tmp/cy_lot.json || echo "(empty)"
+          echo ""
+          echo "=== Tainan Availability (first 500 chars) ==="
+          head -c 500 /tmp/tn_avail.json || echo "(empty)"
+
       # ── Python：轉換並合併資料 ─────────────────────────────────────────
       - name: Convert and merge data
         run: |
@@ -96,16 +111,25 @@ jobs:
               try:
                   raw = open(path, encoding='utf-8').read().strip()
                   if not raw or raw.startswith('<'):
-                      print(f"  [WARN] {path} 回傳非 JSON 內容")
+                      print(f"  [WARN] {path} 回傳非 JSON 內容: {raw[:200]}")
                       return []
                   data = json.loads(raw)
-                  # v2 格式：{"ParkingLots": [...]} 或 {"ParkingAvailabilities": [...]}
-                  for key in ('ParkingLots', 'ParkingAvailabilities', 'CarParks'):
+                  # Debug：印出頂層 key
+                  if isinstance(data, dict):
+                      print(f"  [DEBUG] {path} 頂層 keys: {list(data.keys())}")
+                      for key in data:
+                          val = data[key]
+                          if isinstance(val, list):
+                              print(f"    key='{key}' 長度={len(val)}, 第一筆keys={list(val[0].keys()) if val else '(空)'}")
+                  elif isinstance(data, list):
+                      print(f"  [DEBUG] {path} 是 list, 長度={len(data)}")
+                  # 嘗試各種已知 key
+                  for key in ('ParkingLots', 'ParkingAvailabilities', 'CarParks', 'data', 'Data'):
                       if isinstance(data, dict) and key in data:
                           return data[key]
                   if isinstance(data, list):
                       return data
-                  print(f"  [WARN] {path} 未知格式: {list(data.keys()) if isinstance(data, dict) else type(data)}")
+                  print(f"  [WARN] {path} 未知格式，無法解析")
                   return []
               except Exception as e:
                   print(f"  [ERROR] 載入 {path} 失敗: {e}")

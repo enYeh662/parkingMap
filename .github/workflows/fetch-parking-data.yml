@@ -1,9 +1,9 @@
-name: Fetch Parking Data
+name: Fetch Parking Data from TDX
 
 on:
   schedule:
-    - cron: '0 */6 * * *'   # 每 6 小時執行一次
-  workflow_dispatch:          # 也可以手動觸發
+    - cron: '*/10 * * * *'   # 每 10 分鐘執行一次
+  workflow_dispatch:           # 手動觸發
 
 jobs:
   fetch:
@@ -12,123 +12,256 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
+      # ── 取得 TDX Access Token ──────────────────────────────────────────
       - name: Fetch TDX Token
         id: token
         run: |
-          TOKEN=$(curl -s -X POST "https://tdx.transportdata.tw/auth/realms/TDXConnect/protocol/openid-connect/token" \
+          TOKEN=$(curl -s -X POST \
+            "https://tdx.transportdata.tw/auth/realms/TDXConnect/protocol/openid-connect/token" \
             -H "Content-Type: application/x-www-form-urlencoded" \
             -d "grant_type=client_credentials&client_id=${{ secrets.TDX_CLIENT_ID }}&client_secret=${{ secrets.TDX_CLIENT_SECRET }}" \
             | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
           echo "token=$TOKEN" >> $GITHUB_OUTPUT
 
-      - name: Fetch Tainan Parking Data
+      # ── 高雄：基本資料 + 即時空位 ─────────────────────────────────────
+      - name: Fetch Kaohsiung ParkingLot
         run: |
           curl -s -X GET \
-            "https://tdx.transportdata.tw/api/basic/v1/Parking/OffStreet/CarPark/City/Tainan?\$format=JSON&\$top=1000" \
+            "https://tdx.transportdata.tw/api/basic/v2/Parking/OffStreet/ParkingLot/City/Kaohsiung?\$format=JSON&\$top=2000" \
             -H "Authorization: Bearer ${{ steps.token.outputs.token }}" \
-            -o /tmp/tainan_raw.json
+            -o /tmp/kh_lot.json
 
-      - name: Fetch Chiayi Parking Data
+      - name: Fetch Kaohsiung ParkingAvailability
         run: |
           curl -s -X GET \
-            "https://tdx.transportdata.tw/api/basic/v1/Parking/OffStreet/CarPark/City/Chiayi?\$format=JSON&\$top=1000" \
+            "https://tdx.transportdata.tw/api/basic/v2/Parking/OffStreet/ParkingAvailability/City/Kaohsiung?\$format=JSON&\$top=2000" \
             -H "Authorization: Bearer ${{ steps.token.outputs.token }}" \
-            -o /tmp/chiayi_raw.json
-          curl -s -X GET \
-            "https://tdx.transportdata.tw/api/basic/v1/Parking/OffStreet/CarPark/City/ChiayiCounty?\$format=JSON&\$top=1000" \
-            -H "Authorization: Bearer ${{ steps.token.outputs.token }}" \
-            -o /tmp/chiayi_county_raw.json
+            -o /tmp/kh_avail.json
 
-      - name: Convert to JS format
+      # ── 台南：基本資料 + 即時空位 ─────────────────────────────────────
+      - name: Fetch Tainan ParkingLot
         run: |
-          python3 << 'EOF'
-          import json, re
+          curl -s -X GET \
+            "https://tdx.transportdata.tw/api/basic/v2/Parking/OffStreet/ParkingLot/City/Tainan?\$format=JSON&\$top=2000" \
+            -H "Authorization: Bearer ${{ steps.token.outputs.token }}" \
+            -o /tmp/tn_lot.json
 
-          def extract_district(addr, city_name):
-              if not addr: return city_name
-              # 移除縣市名稱前綴（台南市、臺南市、嘉義市、嘉義縣）
-              addr = re.sub(r'^(台南市|臺南市|嘉義市|嘉義縣|高雄市)', '', addr)
-              # 提取行政區（XX區、XX鄉、XX鎮、XX市）
-              m = re.match(r'^([^\d\s]{2,4}[區鄉鎮市])', addr)
-              if m: return m.group(1)
-              return city_name
+      - name: Fetch Tainan ParkingAvailability
+        run: |
+          curl -s -X GET \
+            "https://tdx.transportdata.tw/api/basic/v2/Parking/OffStreet/ParkingAvailability/City/Tainan?\$format=JSON&\$top=2000" \
+            -H "Authorization: Bearer ${{ steps.token.outputs.token }}" \
+            -o /tmp/tn_avail.json
+
+      # ── 嘉義市：基本資料 + 即時空位 ───────────────────────────────────
+      - name: Fetch Chiayi ParkingLot
+        run: |
+          curl -s -X GET \
+            "https://tdx.transportdata.tw/api/basic/v2/Parking/OffStreet/ParkingLot/City/Chiayi?\$format=JSON&\$top=2000" \
+            -H "Authorization: Bearer ${{ steps.token.outputs.token }}" \
+            -o /tmp/cy_lot.json
+
+      - name: Fetch Chiayi ParkingAvailability
+        run: |
+          curl -s -X GET \
+            "https://tdx.transportdata.tw/api/basic/v2/Parking/OffStreet/ParkingAvailability/City/Chiayi?\$format=JSON&\$top=2000" \
+            -H "Authorization: Bearer ${{ steps.token.outputs.token }}" \
+            -o /tmp/cy_avail.json
+
+      # ── 嘉義縣：基本資料 + 即時空位 ───────────────────────────────────
+      - name: Fetch ChiayiCounty ParkingLot
+        run: |
+          curl -s -X GET \
+            "https://tdx.transportdata.tw/api/basic/v2/Parking/OffStreet/ParkingLot/City/ChiayiCounty?\$format=JSON&\$top=2000" \
+            -H "Authorization: Bearer ${{ steps.token.outputs.token }}" \
+            -o /tmp/cyc_lot.json
+
+      - name: Fetch ChiayiCounty ParkingAvailability
+        run: |
+          curl -s -X GET \
+            "https://tdx.transportdata.tw/api/basic/v2/Parking/OffStreet/ParkingAvailability/City/ChiayiCounty?\$format=JSON&\$top=2000" \
+            -H "Authorization: Bearer ${{ steps.token.outputs.token }}" \
+            -o /tmp/cyc_avail.json
+
+      # ── Python：轉換並合併資料 ─────────────────────────────────────────
+      - name: Convert and merge data
+        run: |
+          python3 << 'PYEOF'
+          import json, re, os
+
+          # ── 工具函式 ──────────────────────────────────────────────────
 
           def load_json(path):
+              """載入 JSON，支援 TDX v2 的各種回傳格式"""
               try:
-                  data = json.loads(open(path, encoding='utf-8').read())
-                  # TDX 格式：{"CarParks": [...]}
-                  if isinstance(data, dict) and 'CarParks' in data:
-                      return data['CarParks']
+                  raw = open(path, encoding='utf-8').read().strip()
+                  if not raw or raw.startswith('<'):
+                      print(f"  [WARN] {path} 回傳非 JSON 內容")
+                      return []
+                  data = json.loads(raw)
+                  # v2 格式：{"ParkingLots": [...]} 或 {"ParkingAvailabilities": [...]}
+                  for key in ('ParkingLots', 'ParkingAvailabilities', 'CarParks'):
+                      if isinstance(data, dict) and key in data:
+                          return data[key]
                   if isinstance(data, list):
                       return data
+                  print(f"  [WARN] {path} 未知格式: {list(data.keys()) if isinstance(data, dict) else type(data)}")
                   return []
               except Exception as e:
-                  print(f"Error loading {path}: {e}")
+                  print(f"  [ERROR] 載入 {path} 失敗: {e}")
                   return []
 
           def get_str(val):
-              if val is None: return ''
+              """取得多語系欄位的中文值"""
+              if val is None:
+                  return ''
               if isinstance(val, dict):
-                  return val.get('Zh_tw', '') or val.get('En', '') or ''
+                  return val.get('Zh_tw') or val.get('En') or ''
               return str(val)
 
-          def parse_tdx(path, city_name):
-              data = load_json(path)
-              print(f"{city_name}: {len(data)} 筆")
+          def extract_district(addr, city_name):
+              """從地址提取行政區名稱"""
+              if not addr:
+                  return city_name
+              # 移除縣市前綴
+              addr = re.sub(r'^(台南市|臺南市|嘉義市|嘉義縣|高雄市)', '', addr)
+              m = re.match(r'^([^\d\s]{2,4}[區鄉鎮市])', addr)
+              if m:
+                  return m.group(1)
+              return city_name
+
+          def park_type_str(t):
+              """停車場類型代碼轉中文"""
+              # TDX v2: 1=平面, 2=立體, 3=地下, 4=機械
+              return '立體' if t in (2, 3, 4) else '平面'
+
+          # ── 建立即時空位索引 ──────────────────────────────────────────
+
+          def build_avail_index(avail_list):
+              """以 CarParkID 為 key 建立空位查詢表"""
+              idx = {}
+              for a in avail_list:
+                  if not isinstance(a, dict):
+                      continue
+                  pid = a.get('CarParkID', '')
+                  if not pid:
+                      continue
+                  # 小客車剩餘車位
+                  spaces = a.get('AvailableSpaces', None)
+                  if spaces is None:
+                      spaces = a.get('CarParkAvailableSpaces', None)
+                  # 機車剩餘車位
+                  moto = a.get('MotorcycleAvailableSpaces', None)
+                  idx[pid] = {
+                      'smallcar': int(spaces) if spaces is not None else -2,
+                      'motorcycle': int(moto) if moto is not None else -2,
+                  }
+              return idx
+
+          # ── 主轉換函式 ────────────────────────────────────────────────
+
+          def parse_city(lot_path, avail_path, city_label):
+              lots = load_json(lot_path)
+              avails = load_json(avail_path)
+              avail_idx = build_avail_index(avails)
+              print(f"  {city_label}: {len(lots)} 停車場, {len(avails)} 空位資料")
+
               results = []
-              for p in data:
-                  if not isinstance(p, dict): continue
+              for p in lots:
+                  if not isinstance(p, dict):
+                      continue
+
+                  pid = p.get('CarParkID', '')
+                  name = get_str(p.get('CarParkName', ''))
+                  if not pid or not name:
+                      continue
+
+                  # 座標
                   geo = p.get('CarParkPosition') or {}
                   lat = geo.get('PositionLat', '')
                   lng = geo.get('PositionLon', '')
-                  if not lat or not lng: continue
+                  if not lat or not lng:
+                      continue
+
+                  # 地址與行政區
+                  addr = get_str(p.get('Address', ''))
+                  district = extract_district(addr, city_label)
+
+                  # 費率說明
                   fare = get_str(p.get('FareDescription', ''))
                   has_monthly = p.get('MonthlyTicketAvailable', 0) == 1
                   if has_monthly and '月租' not in fare:
-                      fare = ('月租方案可洽停車場。' if not fare else fare + '月租方案可洽停車場。')
-                  park_type = p.get('CarParkType', 1)
-                  addr = get_str(p.get('Address', ''))
+                      fare = fare + ('月租方案可洽停車場。' if fare else '月租方案可洽停車場。')
+
+                  # 停車場類型
+                  ptype = park_type_str(p.get('CarParkType', 1))
+
+                  # 總車位數
+                  total = p.get('TotalSpaces', '') or ''
+
+                  # 即時空位（從 avail_idx 查）
+                  av = avail_idx.get(pid, {})
+                  small_vac = av.get('smallcar', -2)
+                  moto_vac = av.get('motorcycle', -2)
+
                   results.append({
-                      'id': get_str(p.get('CarParkID', '')),
-                      'name': get_str(p.get('CarParkName', '')),
-                      'city': city_name,
-                      'areaname': extract_district(addr, city_name),
+                      'id': pid,
+                      'name': name,
+                      'city': city_label,
+                      'areaname': district,
                       'location': addr,
                       'lat': str(lat),
                       'lng': str(lng),
-                      'volumn': str(p.get('TotalSpaces', '') or ''),
-                      'smallcarVacancy': '-2',
+                      'volumn': str(total),
+                      'smallcarVacancy': str(small_vac),
+                      'motorcycleVacancy': str(moto_vac),
                       'businesshours': get_str(p.get('ServiceInfo', '')),
                       'chargeway': fare,
                       'telephone': get_str(p.get('CarParkPhone', '')),
-                      'parkingLotType': '立體' if park_type in [2,3,4] else '平面',
+                      'parkingLotType': ptype,
                   })
               return results
 
-          tainan = parse_tdx('/tmp/tainan_raw.json', '台南市')
-          chiayi = parse_tdx('/tmp/chiayi_raw.json', '嘉義市')
-          chiayi_c = parse_tdx('/tmp/chiayi_county_raw.json', '嘉義縣')
+          # ── 高雄 ──────────────────────────────────────────────────────
+          print("處理高雄...")
+          kh = parse_city('/tmp/kh_lot.json', '/tmp/kh_avail.json', '高雄市')
 
-          # 嘉義市 + 嘉義縣合併
-          chiayi_all = chiayi + chiayi_c
-          print(f"台南: {len(tainan)} 筆, 嘉義: {len(chiayi_all)} 筆")
+          # ── 台南 ──────────────────────────────────────────────────────
+          print("處理台南...")
+          tn = parse_city('/tmp/tn_lot.json', '/tmp/tn_avail.json', '台南市')
+
+          # ── 嘉義市 + 嘉義縣 ──────────────────────────────────────────
+          print("處理嘉義...")
+          cy = parse_city('/tmp/cy_lot.json', '/tmp/cy_avail.json', '嘉義市')
+          cyc = parse_city('/tmp/cyc_lot.json', '/tmp/cyc_avail.json', '嘉義縣')
+          cy_all = cy + cyc
+
+          # ── 輸出 JS 檔 ────────────────────────────────────────────────
+          print(f"\n輸出結果：高雄 {len(kh)} 筆, 台南 {len(tn)} 筆, 嘉義 {len(cy_all)} 筆")
+
+          with open('parking_data.js', 'w', encoding='utf-8') as f:
+              f.write('var PARKING_DATA = ')
+              json.dump(kh, f, ensure_ascii=False, separators=(',', ':'))
+              f.write(';\n')
 
           with open('data_tainan.js', 'w', encoding='utf-8') as f:
               f.write('var PARKING_DATA_TAINAN = ')
-              json.dump(tainan, f, ensure_ascii=False)
+              json.dump(tn, f, ensure_ascii=False, separators=(',', ':'))
               f.write(';\n')
 
           with open('data_chiayi.js', 'w', encoding='utf-8') as f:
               f.write('var PARKING_DATA_CHIAYI = ')
-              json.dump(chiayi_all, f, ensure_ascii=False)
+              json.dump(cy_all, f, ensure_ascii=False, separators=(',', ':'))
               f.write(';\n')
-          print("完成")
-          EOF
 
+          print("完成！")
+          PYEOF
+
+      # ── Commit & Push ─────────────────────────────────────────────────
       - name: Commit and push
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add data_tainan.js data_chiayi.js
-          git diff --staged --quiet || git commit -m "自動更新台南/嘉義停車場資料 $(date '+%Y-%m-%d %H:%M')"
+          git add parking_data.js data_tainan.js data_chiayi.js
+          git diff --staged --quiet || git commit -m "chore: 自動更新停車場資料 $(date -u '+%Y-%m-%d %H:%M UTC')"
           git push

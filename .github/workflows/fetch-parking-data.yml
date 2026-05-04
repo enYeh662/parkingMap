@@ -23,6 +23,36 @@ jobs:
             | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
           echo "token=$TOKEN" >> $GITHUB_OUTPUT
 
+      # ── 探測正確的 API 路徑 ───────────────────────────────────────────
+      - name: Probe correct API endpoints
+        run: |
+          echo "=== 測試各種可能的端點路徑 ==="
+          
+          echo "--- v2/Parking/OffStreet/ParkingLot/City/Kaohsiung ---"
+          curl -s "https://tdx.transportdata.tw/api/basic/v2/Parking/OffStreet/ParkingLot/City/Kaohsiung?\$format=JSON&\$top=1" \
+            -H "Authorization: Bearer ${{ steps.token.outputs.token }}" | head -c 300
+          echo ""
+          
+          echo "--- v3/Parking/OffStreet/ParkingLot/City/Kaohsiung ---"
+          curl -s "https://tdx.transportdata.tw/api/basic/v3/Parking/OffStreet/ParkingLot/City/Kaohsiung?\$format=JSON&\$top=1" \
+            -H "Authorization: Bearer ${{ steps.token.outputs.token }}" | head -c 300
+          echo ""
+          
+          echo "--- v2/Parking/OffStreet/CarPark/City/Kaohsiung ---"
+          curl -s "https://tdx.transportdata.tw/api/basic/v2/Parking/OffStreet/CarPark/City/Kaohsiung?\$format=JSON&\$top=1" \
+            -H "Authorization: Bearer ${{ steps.token.outputs.token }}" | head -c 300
+          echo ""
+          
+          echo "--- v1/Parking/OffStreet/CarPark/City/Kaohsiung ---"
+          curl -s "https://tdx.transportdata.tw/api/basic/v1/Parking/OffStreet/CarPark/City/Kaohsiung?\$format=JSON&\$top=1" \
+            -H "Authorization: Bearer ${{ steps.token.outputs.token }}" | head -c 300
+          echo ""
+          
+          echo "--- v2/Parking/OffStreet/ParkingLot ---"
+          curl -s "https://tdx.transportdata.tw/api/basic/v2/Parking/OffStreet/ParkingLot?\$format=JSON&\$top=1&\$filter=City eq 'Kaohsiung'" \
+            -H "Authorization: Bearer ${{ steps.token.outputs.token }}" | head -c 300
+          echo ""
+
       # ── 高雄：基本資料 + 即時空位 ─────────────────────────────────────
       - name: Fetch Kaohsiung ParkingLot
         run: |
